@@ -1,0 +1,10 @@
+◇ injected env (14) from .env // tip: ⌘ enable debugging { debug: true }
+Google OAuth configured with Client ID: 697850144909-s1...
+◇ injected env (0) from .env // tip: ⌘ enable debugging { debug: true }
+MongoDB Connected
+Redis connection unavailable: ECONNREFUSED
+User indexes synced (unique email constraint enforced)
+Reminder and alarm cron jobs started
+Port 5000 busy, switching to 5001
+Server running on port 5000
+Server running on port 5001

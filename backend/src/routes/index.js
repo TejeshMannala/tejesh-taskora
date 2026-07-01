@@ -1,0 +1,44 @@
+import express from 'express';
+import authRoutes from './auth.routes.js';
+import taskRoutes from './task.routes.js';
+import scheduleRoutes from './schedule.routes.js';
+import subjectRoutes from './subject.routes.js';
+import analyticsRoutes from './analytics.routes.js';
+import achievementRoutes from './achievement.routes.js';
+import notificationRoutes from './notification.routes.js';
+import focusRoutes from './focus.routes.js';
+import calendarRoutes from './calendar.routes.js';
+import userRoutes from './user.routes.js';
+import searchRoutes from './search.routes.js';
+import adminAuthRoutes from './adminAuth.routes.js';
+import adminCourseRoutes from './adminCourse.routes.js';
+import adminUserRoutes from './adminUser.routes.js';
+import adminTaskRoutes from './adminTask.routes.js';
+import alarmRoutes from './alarm.routes.js';
+import academicRoutes from './academic.routes.js';
+import otpRoutes from './otp.routes.js';
+import educationRoutes from './education.routes.js';
+
+const router = express.Router();
+
+router.use('/auth', authRoutes);
+router.use('/tasks', taskRoutes);
+router.use('/schedules', scheduleRoutes);
+router.use('/subjects', subjectRoutes);
+router.use('/analytics', analyticsRoutes);
+router.use('/achievements', achievementRoutes);
+router.use('/notifications', notificationRoutes);
+router.use('/focus', focusRoutes);
+router.use('/calendar', calendarRoutes);
+router.use('/users', userRoutes);
+router.use('/search', searchRoutes);
+router.use('/admin', adminAuthRoutes);
+router.use('/admin', adminCourseRoutes);
+router.use('/admin', adminUserRoutes);
+router.use('/admin', adminTaskRoutes);
+router.use('/alarms', alarmRoutes);
+router.use('/academic', academicRoutes);
+router.use('/otp', otpRoutes);
+router.use('/education', educationRoutes);
+
+export default router;

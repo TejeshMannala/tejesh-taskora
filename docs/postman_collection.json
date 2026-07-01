@@ -1,0 +1,136 @@
+{
+  "info": {
+    "name": "Taskora Core API",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:5000/api/v1" },
+    { "key": "token", "value": "" },
+    { "key": "groupId", "value": "" },
+    { "key": "subjectId", "value": "" },
+    { "key": "taskId", "value": "" }
+  ],
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      { "key": "token", "value": "{{token}}", "type": "string" }
+    ]
+  },
+  "item": [
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Signup",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/auth/signup",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Student User\",\n  \"email\": \"student@example.com\",\n  \"password\": \"Password123!\",\n  \"college\": \"Demo College\",\n  \"educationType\": \"B.Tech\",\n  \"group\": \"{{groupId}}\",\n  \"academicYear\": \"1st Year\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Login",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/auth/login",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"student@example.com\",\n  \"password\": \"Password123!\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Google Login",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/auth/google",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"credential\": \"GOOGLE_ID_TOKEN_OR_ACCESS_TOKEN\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Auth Profile",
+          "request": { "method": "GET", "url": "{{baseUrl}}/auth/profile" }
+        }
+      ]
+    },
+    {
+      "name": "Profile and Academic",
+      "item": [
+        {
+          "name": "Get Groups",
+          "request": { "method": "GET", "url": "{{baseUrl}}/academic/groups?educationType=B.Tech" }
+        },
+        {
+          "name": "Get Profile",
+          "request": { "method": "GET", "url": "{{baseUrl}}/users/profile" }
+        },
+        {
+          "name": "Update Profile",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/users/profile",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Student User\",\n  \"college\": \"Demo College\",\n  \"educationType\": \"B.Tech\",\n  \"group\": \"{{groupId}}\",\n  \"semesterYear\": \"Semester 1\",\n  \"academicYear\": \"2026-2027\",\n  \"profilePicture\": \"\"\n}"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Subjects",
+      "item": [
+        { "name": "List Subjects", "request": { "method": "GET", "url": "{{baseUrl}}/subjects" } },
+        {
+          "name": "Create Subject",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/subjects",
+            "body": { "mode": "raw", "raw": "{\n  \"name\": \"Data Structures\",\n  \"color\": \"#7c3aed\",\n  \"targetHours\": 40\n}" }
+          }
+        },
+        {
+          "name": "Update Subject",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/subjects/{{subjectId}}",
+            "body": { "mode": "raw", "raw": "{\n  \"targetHours\": 60\n}" }
+          }
+        },
+        { "name": "Delete Subject", "request": { "method": "DELETE", "url": "{{baseUrl}}/subjects/{{subjectId}}" } }
+      ]
+    },
+    {
+      "name": "Tasks and Reminders",
+      "item": [
+        { "name": "List Tasks", "request": { "method": "GET", "url": "{{baseUrl}}/tasks" } },
+        {
+          "name": "Create Task With Reminder",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/tasks",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Study DSA\",\n  \"subject\": \"Data Structures\",\n  \"durationMinutes\": 60,\n  \"priority\": \"High\",\n  \"date\": \"2026-07-01\",\n  \"dueDate\": \"2026-07-01T20:00:00.000Z\",\n  \"reminderEnabled\": true,\n  \"reminders\": { \"enabled\": true, \"frequencyMinutes\": 5 },\n  \"notes\": \"Revise trees and graphs\"\n}"
+            }
+          }
+        },
+        { "name": "Toggle Task Complete", "request": { "method": "PATCH", "url": "{{baseUrl}}/tasks/{{taskId}}/toggle" } },
+        { "name": "Delete Task", "request": { "method": "DELETE", "url": "{{baseUrl}}/tasks/{{taskId}}" } }
+      ]
+    }
+  ]
+}
