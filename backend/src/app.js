@@ -18,6 +18,7 @@ const allowedOrigins = [
   process.env.FRONTEND_URL || 'http://localhost:5173',
   'http://localhost:5174',
   'http://127.0.0.1:5173',
+  'https://tejesh-taskora-frontend.onrender.com',
 ];
 
 app.use(cors({
@@ -147,7 +148,6 @@ app.use('/api/v1', (req, res, next) => {
 });
 
 app.use('/api/v1', apiRoutes);
-app.use('/api', apiRoutes);
 
 app.use((err, req, res, next) => {
   console.error(err.stack);

@@ -8,6 +8,7 @@ import { userApi } from '../../services/userApi';
 import { academicApi } from '../../services/academicApi';
 import { FALLBACK_EDUCATION_TYPES } from '../../constants/academic';
 import { semesterApi } from '../../services/semesterApi';
+import { API_BASE } from '../../services/api';
 import { useDispatch } from 'react-redux';
 import { updateUser } from '../../redux/slices/authSlice';
 import Select from '../../components/ui/Select';
@@ -217,8 +218,7 @@ const Profile = () => {
   const getApiUrl = (path) => {
     if (!path) return '';
     if (path.startsWith('http') || path.startsWith('data:')) return path;
-    const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000';
-    return `${baseUrl}${path}`;
+    return `${API_BASE}${path}`;
   };
 
   if (loading) return <PageSkeleton />;

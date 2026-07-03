@@ -8,12 +8,12 @@ import { searchApi } from '../services/searchApi';
 import { notificationApi } from '../services/notificationApi';
 import useTheme from '../hooks/useTheme';
 import toast from 'react-hot-toast';
+import { API_BASE } from '../services/api';
 
 const getApiUrl = (path) => {
   if (!path) return '';
   if (path.startsWith('http') || path.startsWith('data:')) return path;
-  const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000';
-  return `${baseUrl}${path}`;
+  return `${API_BASE}${path}`;
 };
 
 const Navbar = ({ onMenuToggle }) => {

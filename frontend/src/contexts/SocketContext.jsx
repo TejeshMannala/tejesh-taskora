@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useRef } from 'react';
 import { io } from 'socket.io-client';
 import { useSelector, useDispatch } from 'react-redux';
 import { logout } from '../redux/slices/authSlice';
+import { API_BASE } from '../services/api';
 
 const SocketContext = createContext();
 
@@ -26,7 +27,7 @@ export const SocketProvider = ({ children }) => {
 
     if (socketRef.current?.connected) return;
 
-    const socketUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+    const socketUrl = API_BASE;
 
     const socket = io(socketUrl, {
       auth: { token },

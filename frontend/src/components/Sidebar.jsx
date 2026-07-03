@@ -5,12 +5,12 @@ import { useSelector } from 'react-redux';
 import {
   FaHome, FaTasks, FaBook, FaBell, FaCog, FaChevronLeft, FaChevronRight, FaUser, FaClock, FaTimes
 } from 'react-icons/fa';
+import { API_BASE } from '../services/api';
 
 const getApiUrl = (path) => {
   if (!path) return '';
   if (path.startsWith('http') || path.startsWith('data:')) return path;
-  const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000';
-  return `${baseUrl}${path}`;
+  return `${API_BASE}${path}`;
 };
 
 const menuItems = [
