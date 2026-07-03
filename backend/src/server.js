@@ -84,7 +84,7 @@ const startServer = (port) => {
     .on('listening', () => {
       const actualPort = server.address().port;
       console.log(`Server running on port ${actualPort}`);
-      console.log(`FRONTEND_URL = ${process.env.FRONTEND_URL || 'http://localhost:5173'}`);
+      // console.log(`FRONTEND_URL = ${process.env.FRONTEND_URL || 'http://localhost:5173'}`);
     });
 };
 
