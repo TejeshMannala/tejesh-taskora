@@ -1,9 +1,11 @@
 import axios from 'axios';
 
+const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || 'http://localhost:5000',
+  baseURL: API_BASE,
   withCredentials: true,
-  timeout: 15000,
+  timeout: 30000,
 });
 
 api.interceptors.request.use(
@@ -19,8 +21,10 @@ api.interceptors.request.use(
 
 export const checkBackendHealth = async () => {
   try {
-    const base = import.meta.env.VITE_API_URL || 'http://localhost:5000';
-    const res = await fetch(`${base}/api/health`, { method: 'GET', signal: AbortSignal.timeout(5000) });
+    const res = await fetch(`${API_BASE}/api/health`, {
+      method: 'GET',
+      signal: AbortSignal.timeout(10000),
+    });
     if (!res.ok) return { reachable: true, healthy: false, status: res.status };
     const data = await res.json();
     return { reachable: true, healthy: data.mode === 'normal', mode: data.mode, data };
@@ -52,4 +56,5 @@ api.interceptors.response.use(
   }
 );
 
+export { API_BASE };
 export default api;

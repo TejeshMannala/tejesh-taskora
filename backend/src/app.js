@@ -22,11 +22,12 @@ const allowedOrigins = [
 
 app.use(cors({
   origin: (origin, callback) => {
-    if (!origin || allowedOrigins.includes(origin)) {
-      callback(null, true);
-    } else {
-      callback(new Error('Not allowed by CORS'));
-    }
+    if (!origin) return callback(null, true);
+    const matchOrigin = allowedOrigins.find((o) => origin.startsWith(o.replace(/\/+$/, '')));
+    if (matchOrigin) return callback(null, true);
+    const feUrl = (process.env.FRONTEND_URL || '').replace(/\/+$/, '');
+    if (feUrl && origin.startsWith(feUrl)) return callback(null, true);
+    callback(new Error('Not allowed by CORS'));
   },
   credentials: true,
 }));
