@@ -31,7 +31,11 @@ app.use(cors({
     callback(new Error('Not allowed by CORS'));
   },
   credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
 }));
+
+app.options('*', cors());
 app.use(helmet({
   crossOriginOpenerPolicy: false,
   crossOriginResourcePolicy: { policy: 'cross-origin' },
