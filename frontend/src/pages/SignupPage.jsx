@@ -1,14 +1,14 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { useDispatch, useSelector } from 'react-redux';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { FaCheckCircle, FaEye, FaEyeSlash, FaSpinner } from 'react-icons/fa';
 import confetti from 'canvas-confetti';
 import { toast } from 'react-hot-toast';
-import GoogleAuthButton from '../components/auth/GoogleAuthButton';
 import Navbar from '../components/Navbar';
+import GoogleAuthButton from '../components/auth/GoogleAuthButton';
 import { signup, googleLogin } from '../redux/slices/authSlice';
 import { signupSchema } from '../utils/validations';
 import PasswordStrengthMeter from '../components/auth/PasswordStrengthMeter';
@@ -16,8 +16,7 @@ import ErrorModal from '../components/ui/ErrorModal';
 import { academicApi } from '../services/academicApi';
 import api from '../services/api';
 import Select from '../components/ui/Select';
-
-const EDUCATION_TYPES = ['Intermediate', 'Degree', 'B.Tech'];
+import { FALLBACK_EDUCATION_TYPES } from '../constants/academic';
 
 const SignupPage = () => {
   const navigate = useNavigate();
@@ -25,14 +24,13 @@ const SignupPage = () => {
   const { isLoading } = useSelector((state) => state.auth);
   const [groups, setGroups] = useState([]);
   const [groupsLoading, setGroupsLoading] = useState(false);
+  const [educationTypes, setEducationTypes] = useState(FALLBACK_EDUCATION_TYPES);
   const [emailStatus, setEmailStatus] = useState(null);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
   const [errorModal, setErrorModal] = useState({ isOpen: false, type: 'default', message: '' });
-  const [academicYearOptions, setAcademicYearOptions] = useState([]);
-
   const {
     register,
     handleSubmit,
@@ -52,13 +50,23 @@ const SignupPage = () => {
       college: '',
       educationType: '',
       group: '',
-      academicYear: '',
     },
   });
 
   const email = watch('email');
   const selectedEducationType = watch('educationType');
   const password = watch('password');
+
+  useEffect(() => {
+    academicApi.getEducationTypes()
+      .then((data) => {
+        const types = data.educationTypes || FALLBACK_EDUCATION_TYPES;
+        setEducationTypes(types);
+      })
+      .catch(() => {
+        setEducationTypes(FALLBACK_EDUCATION_TYPES);
+      });
+  }, []);
 
   useEffect(() => {
     setValue('group', '');
@@ -78,16 +86,6 @@ const SignupPage = () => {
     };
     loadGroups();
   }, [selectedEducationType, setValue]);
-
-  useEffect(() => {
-    const currentYear = new Date().getFullYear();
-    const years = [];
-    for (let i = -1; i < 4; i++) {
-      const start = currentYear + i;
-      years.push(`${start}-${start + 1}`);
-    }
-    setAcademicYearOptions(years);
-  }, []);
 
   useEffect(() => {
     const checkEmail = async () => {
@@ -123,7 +121,6 @@ const SignupPage = () => {
         password: data.password,
         college: data.college,
         group: data.group,
-        academicYear: data.academicYear,
         educationType: data.educationType,
       })).unwrap();
 
@@ -144,10 +141,10 @@ const SignupPage = () => {
     }
   };
 
-  const handleGoogleSuccess = async (credentialResponse) => {
+  const handleGoogleSignup = async (accessToken) => {
     setIsGoogleLoading(true);
     try {
-      const result = await dispatch(googleLogin(credentialResponse.credential)).unwrap();
+      const result = await dispatch(googleLogin(accessToken)).unwrap();
       if (result.success) {
         setIsSuccess(true);
         toast.success('Welcome to TASKORA!');
@@ -157,7 +154,7 @@ const SignupPage = () => {
       setErrorModal({
         isOpen: true,
         type: 'google-auth',
-        message: error?.message || 'Google signup failed. Please try again.',
+        message: error?.message || error?.data?.message || 'Google signup failed. Please try again.',
       });
     } finally {
       setIsGoogleLoading(false);
@@ -165,12 +162,11 @@ const SignupPage = () => {
   };
 
   const handleGoogleError = (error) => {
-    setIsGoogleLoading(false);
     setErrorModal({
       isOpen: true,
       type: 'google-auth',
       title: 'Google Signup Failed',
-      message: error?.message || 'Google signup encountered an error. Please try again.',
+      message: error?.message || 'Google signup was cancelled or failed. Please try again.',
     });
   };
 
@@ -179,87 +175,106 @@ const SignupPage = () => {
       errors[field] ? 'border-red-500' : 'border-white/10'
     }`;
 
-  const btnClass = 'w-full max-w-[300px] mx-auto';
-
   return (
     <div className="min-h-screen bg-[#09090f] text-white">
       <div className="fixed inset-0 bg-[radial-gradient(circle_at_top_left,rgba(6,182,212,0.16),transparent_34%),radial-gradient(circle_at_bottom_right,rgba(124,58,237,0.14),transparent_36%)]" />
       <Navbar />
 
       <main className="relative z-10 px-4 pb-12 pt-24">
-        <AnimatePresence mode="wait">
-          {isSuccess ? (
-            <motion.div
-              initial={{ opacity: 0, scale: 0.96 }}
-              animate={{ opacity: 1, scale: 1 }}
-              className="mx-auto mt-16 max-w-md rounded-2xl border border-white/10 bg-white/10 p-10 text-center backdrop-blur-xl"
-            >
-              <FaCheckCircle className="mx-auto mb-5 text-5xl text-green-400" />
-              <h1 className="text-3xl font-bold">Welcome to TASKORA</h1>
-              <p className="mt-2 text-gray-300">Your profile is ready.</p>
-            </motion.div>
-          ) : (
-            <motion.section
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="mx-auto grid max-w-6xl gap-6 lg:grid-cols-[1fr_360px]"
-            >
-              <div className="rounded-2xl border border-white/10 bg-[#12121a]/90 p-5 shadow-2xl backdrop-blur-xl md:p-8">
-                <div className="mb-6">
-                  <h1 className="text-3xl font-bold">Create Account</h1>
-                  <p className="mt-2 text-gray-400">Set up your student profile and academic path.</p>
+        {isSuccess ? (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.96 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="mx-auto mt-16 max-w-md rounded-2xl border border-white/10 bg-white/10 p-10 text-center backdrop-blur-xl"
+          >
+            <FaCheckCircle className="mx-auto mb-5 text-5xl text-green-400" />
+            <h1 className="text-3xl font-bold">Welcome to TASKORA</h1>
+            <p className="mt-2 text-gray-300">Your profile is ready.</p>
+          </motion.div>
+        ) : (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="mx-auto max-w-2xl"
+          >
+            <div className="rounded-2xl border border-white/10 bg-[#12121a]/90 p-5 shadow-2xl backdrop-blur-xl md:p-8">
+              <div className="mb-6 text-center">
+                <h1 className="text-3xl font-bold">Create Account</h1>
+                <p className="mt-2 text-gray-400">Set up your student profile and academic path.</p>
+              </div>
+
+              <div className="mb-6">
+                <GoogleAuthButton
+                  onSuccess={handleGoogleSignup}
+                  onError={handleGoogleError}
+                  isLoading={isGoogleLoading}
+                  type="signup"
+                />
+              </div>
+
+              <div className="relative mb-6">
+                <div className="absolute inset-0 flex items-center">
+                  <div className="w-full border-t border-white/10" />
                 </div>
+                <div className="relative flex justify-center text-sm">
+                  <span className="bg-[#12121a] px-3 text-gray-400">or sign up with email</span>
+                </div>
+              </div>
 
-                <form onSubmit={handleSubmit(handleSignup)} className="grid gap-4 md:grid-cols-2">
-                  <Field label="Full Name" error={errors.fullName?.message}>
-                    <input {...register('fullName')} className={inputClass('fullName')} placeholder="Your full name" />
-                  </Field>
+              <form onSubmit={handleSubmit(handleSignup)} className="grid gap-4 md:grid-cols-2">
+                <Field label="Full Name" error={errors.fullName?.message}>
+                  <input {...register('fullName')} className={inputClass('fullName')} placeholder="Your full name" />
+                </Field>
 
-                  <Field label="Email" error={errors.email?.message}>
-                    <div className="relative">
-                      <input type="email" {...register('email')} className={`${inputClass('email')} pr-11`} placeholder="you@college.edu" />
-                      {emailStatus === 'checking' && <FaSpinner className="absolute right-4 top-4 animate-spin text-gray-400" />}
-                      {emailStatus === 'available' && <FaCheckCircle className="absolute right-4 top-4 text-green-400" />}
+                <Field label="Email" error={errors.email?.message}>
+                  <div className="relative">
+                    <input type="email" {...register('email')} className={`${inputClass('email')} pr-11`} placeholder="you@college.edu" />
+                    {emailStatus === 'checking' && <FaSpinner className="absolute right-4 top-4 animate-spin text-gray-400" />}
+                    {emailStatus === 'available' && <FaCheckCircle className="absolute right-4 top-4 text-green-400" />}
+                  </div>
+                </Field>
+
+                <Field label="Password" error={errors.password?.message}>
+                  <PasswordInput
+                    register={register('password')}
+                    visible={showPassword}
+                    onToggle={() => setShowPassword((value) => !value)}
+                    className={inputClass('password')}
+                  />
+                  <PasswordStrengthMeter password={password} />
+                </Field>
+
+                <Field label="Confirm Password" error={errors.confirmPassword?.message}>
+                  <PasswordInput
+                    register={register('confirmPassword')}
+                    visible={showConfirmPassword}
+                    onToggle={() => setShowConfirmPassword((value) => !value)}
+                    className={inputClass('confirmPassword')}
+                  />
+                </Field>
+
+                <Field label="College" error={errors.college?.message}>
+                  <input {...register('college')} className={inputClass('college')} placeholder="Your college" />
+                </Field>
+
+                <Field label="Education Type" error={errors.educationType?.message}>
+                  <Select
+                    selectProps={{ ...register('educationType') }}
+                    error={errors.educationType?.message}
+                  >
+                    <option value="">Select education type</option>
+                    {educationTypes.map((et) => (
+                      <option key={et} value={et}>{et}</option>
+                    ))}
+                  </Select>
+                </Field>
+
+                <Field label="Group" error={errors.group?.message}>
+                  {!groups.length && selectedEducationType && !groupsLoading ? (
+                    <div className="bg-white/5 border border-yellow-500/30 rounded-lg px-4 py-2.5 text-yellow-300 text-sm">
+                      No groups found for &quot;{selectedEducationType}&quot;. Please select a different Education Type.
                     </div>
-                  </Field>
-
-                  <Field label="Password" error={errors.password?.message}>
-                    <PasswordInput
-                      register={register('password')}
-                      visible={showPassword}
-                      onToggle={() => setShowPassword((value) => !value)}
-                      className={inputClass('password')}
-                    />
-                    <PasswordStrengthMeter password={password} />
-                  </Field>
-
-                  <Field label="Confirm Password" error={errors.confirmPassword?.message}>
-                    <PasswordInput
-                      register={register('confirmPassword')}
-                      visible={showConfirmPassword}
-                      onToggle={() => setShowConfirmPassword((value) => !value)}
-                      className={inputClass('confirmPassword')}
-                    />
-                  </Field>
-
-                  <Field label="College" error={errors.college?.message}>
-                    <input {...register('college')} className={inputClass('college')} placeholder="Your college" />
-                  </Field>
-
-                  <Field label="Education Type" error={errors.educationType?.message}>
-                    <Select
-                      selectProps={{ ...register('educationType') }}
-                      placeholder="Select education type"
-                      error={errors.educationType?.message}
-                    >
-                      <option value="">Select education type</option>
-                      {EDUCATION_TYPES.map((et) => (
-                        <option key={et} value={et}>{et}</option>
-                      ))}
-                    </Select>
-                  </Field>
-
-                  <Field label="Group" error={errors.group?.message}>
+                  ) : (
                     <Select
                       selectProps={{ ...register('group') }}
                       disabled={!selectedEducationType || groupsLoading}
@@ -272,50 +287,27 @@ const SignupPage = () => {
                         <option key={group._id} value={group._id}>{group.name}</option>
                       ))}
                     </Select>
-                  </Field>
+                  )}
+                </Field>
 
-                  <Field label="Academic Year" error={errors.academicYear?.message}>
-                    <Select
-                      selectProps={{ ...register('academicYear') }}
-                      error={errors.academicYear?.message}
-                    >
-                      <option value="">Select year range</option>
-                      {academicYearOptions.map((year) => (
-                        <option key={year} value={year}>{year}</option>
-                      ))}
-                    </Select>
-                  </Field>
-
-                  <div className="md:col-span-2 flex justify-center">
-                    <button
-                      type="submit"
-                      disabled={isLoading || emailStatus === 'checking' || emailStatus === 'exists'}
-                      className={`${btnClass} flex items-center justify-center gap-2 rounded-lg bg-secondary px-4 py-3 font-bold text-gray-950 transition hover:bg-cyan-300 disabled:opacity-60`}
-                    >
-                      {isLoading ? <><FaSpinner className="animate-spin" /> Creating Account...</> : 'Create Account'}
-                    </button>
-                  </div>
-                </form>
-              </div>
-
-              <aside className="rounded-2xl border border-white/10 bg-[#12121a]/90 p-5 backdrop-blur-xl md:p-6">
-                <div className={btnClass}>
-                  <GoogleAuthButton
-                    onSuccess={handleGoogleSuccess}
-                    onError={handleGoogleError}
-                    isLoading={isGoogleLoading}
-                    type="signup"
-                  />
+                <div className="md:col-span-2 mt-2">
+                  <button
+                    type="submit"
+                    disabled={isLoading || emailStatus === 'checking' || emailStatus === 'exists'}
+                    className="flex w-full items-center justify-center gap-2 rounded-lg bg-secondary px-4 py-3 font-bold text-gray-950 transition hover:bg-cyan-300 disabled:opacity-60"
+                  >
+                    {isLoading ? <><FaSpinner className="animate-spin" /> Creating Account...</> : 'Create Account'}
+                  </button>
                 </div>
+              </form>
 
-                <p className="mt-6 text-center text-gray-400">
-                  Already have an account?{' '}
-                  <Link to="/login" className="font-medium text-primary hover:text-white">Sign In</Link>
-                </p>
-              </aside>
-            </motion.section>
-          )}
-        </AnimatePresence>
+              <p className="mt-6 text-center text-gray-400">
+                Already have an account?{' '}
+                <Link to="/login" className="font-medium text-primary hover:text-white">Sign In</Link>
+              </p>
+            </div>
+          </motion.div>
+        )}
       </main>
 
       <ErrorModal

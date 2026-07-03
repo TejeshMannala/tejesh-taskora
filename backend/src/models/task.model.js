@@ -42,6 +42,23 @@ const taskSchema = new mongoose.Schema(
     dueDate: {
       type: Date,
     },
+    dueTime: {
+      type: String,
+    },
+    reminderInterval: {
+      type: Number,
+      default: 5,
+    },
+    lastReminderAt: {
+      type: Date,
+    },
+    nextReminderAt: {
+      type: Date,
+    },
+    reminderCount: {
+      type: Number,
+      default: 0,
+    },
     completed: {
       type: Boolean,
       default: false,

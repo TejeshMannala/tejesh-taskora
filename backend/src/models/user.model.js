@@ -64,14 +64,15 @@ const userSchema = new mongoose.Schema(
     },
     educationType: {
       type: String,
-      enum: ['Intermediate', 'Degree', 'B.Tech'],
     },
     year: {
       type: String,
     },
-    semesterYear: {
-      type: String,
-      trim: true,
+    joiningYear: {
+      type: Number,
+    },
+    endingYear: {
+      type: Number,
     },
     studyStreak: {
       type: Number,

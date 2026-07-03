@@ -43,27 +43,29 @@ export const startReminderCron = () => {
     }
   });
 
-  // Overdue alarm checker - every minute
+  // Smart Alarm Checker - every minute
   cron.schedule('* * * * *', async () => {
     try {
       const now = new Date();
 
-      const overdueTasks = await Task.find({
+      const activeAlarms = await Task.find({
         completed: false,
         reminderEnabled: true,
-        dueDate: { $lte: now, $ne: null },
-        $or: [
-          { alarmTriggered: false },
-          { alarmTriggered: { $exists: false } },
-        ],
+        nextReminderAt: { $lte: now, $ne: null },
       }).populate('user', 'name email');
 
       const io = getIO();
 
-      for (const task of overdueTasks) {
+      for (const task of activeAlarms) {
         task.alarmTriggered = true;
         task.alarmActive = true;
         task.alarmStartedAt = now;
+        task.lastReminderAt = now;
+        task.reminderCount = (task.reminderCount || 0) + 1;
+        
+        const interval = task.reminderInterval || 5;
+        task.nextReminderAt = new Date(now.getTime() + interval * 60000);
+        
         await task.save();
 
         await AlarmHistory.create({
@@ -73,19 +75,31 @@ export const startReminderCron = () => {
         });
 
         if (io) {
+          const overdueMs = task.dueDate ? now - new Date(task.dueDate) : 0;
+          let overdueText = '';
+          if (overdueMs > 0) {
+            const overdueMinutes = Math.floor(overdueMs / 60000);
+            const overdueHours = Math.floor(overdueMinutes / 60);
+            const overdueMins = overdueMinutes % 60;
+            overdueText = `${overdueHours > 0 ? `${overdueHours}h ` : ''}${overdueMins}m`;
+          }
+
           io.to(task.user._id.toString()).emit('alarm:triggered', {
             taskId: task._id,
             title: task.title,
             dueDate: task.dueDate,
             alarmStartedAt: now,
             priority: task.priority,
+            reminderInterval: interval,
+            nextReminderAt: task.nextReminderAt,
+            overdue: overdueText,
           });
         }
 
         await Notification.create({
           user: task.user._id,
-          title: '⚠️ Task Overdue!',
-          message: `"${task.title}" is overdue. Please complete immediately!`,
+          title: '⚠️ Task Reminder',
+          message: `"${task.title}" is pending. Next reminder in ${interval} mins.`,
           type: 'reminder',
           priority: 'critical',
           link: '/tasks',
@@ -93,41 +107,7 @@ export const startReminderCron = () => {
         });
       }
     } catch (error) {
-      console.error('Alarm cron error:', error.message);
-    }
-  });
-
-  // Re-alarm checker - every minute for already triggered alarms (keep reminding)
-  cron.schedule('* * * * *', async () => {
-    try {
-      const now = new Date();
-
-      const activeAlarms = await Task.find({
-        completed: false,
-        alarmTriggered: true,
-        dueDate: { $lte: now, $ne: null },
-      });
-
-      const io = getIO();
-
-      for (const task of activeAlarms) {
-        if (io) {
-          const overdueMs = now - new Date(task.dueDate);
-          const overdueMinutes = Math.floor(overdueMs / 60000);
-          const overdueHours = Math.floor(overdueMinutes / 60);
-          const overdueMins = overdueMinutes % 60;
-
-          io.to(task.user.toString()).emit('alarm:persistent', {
-            taskId: task._id,
-            title: task.title,
-            dueDate: task.dueDate,
-            overdue: `${overdueHours > 0 ? `${overdueHours}h ` : ''}${overdueMins}m`,
-            priority: task.priority,
-          });
-        }
-      }
-    } catch (error) {
-      console.error('Re-alarm cron error:', error.message);
+      console.error('Smart Alarm cron error:', error.message);
     }
   });
 

@@ -40,19 +40,14 @@ export const SocketProvider = ({ children }) => {
     });
 
     socket.on('connect', () => {
-      if (!loggedSockets.has(socket.id)) {
-        loggedSockets.add(socket.id);
-        console.log('Socket connected:', socket.id);
-      }
+      loggedSockets.add(socket.id);
     });
 
     socket.on('disconnect', (reason) => {
       loggedSockets.delete(socket.id);
-      console.log('Socket disconnected:', reason);
     });
 
     socket.on('connect_error', (err) => {
-      console.warn('Socket connection error:', err.message);
       if (err.message === 'Invalid token' || err.message === 'Authentication required') {
         socket.disconnect();
         dispatch(logout());

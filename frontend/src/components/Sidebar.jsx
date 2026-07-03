@@ -1,9 +1,9 @@
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { useSelector } from 'react-redux';
 import {
-  FaHome, FaTasks, FaBook, FaBell, FaCog, FaChevronLeft, FaChevronRight, FaUser, FaClock
+  FaHome, FaTasks, FaBook, FaBell, FaCog, FaChevronLeft, FaChevronRight, FaUser, FaClock, FaTimes
 } from 'react-icons/fa';
 
 const getApiUrl = (path) => {
@@ -23,7 +23,17 @@ const menuItems = [
   { label: 'Settings', icon: <FaCog />, path: '/settings' },
 ];
 
-const Sidebar = () => {
+const sidebarVariants = {
+  open: { x: 0, transition: { type: 'spring', stiffness: 300, damping: 30 } },
+  closed: { x: '-100%', transition: { type: 'spring', stiffness: 300, damping: 30 } },
+};
+
+const overlayVariants = {
+  open: { opacity: 1, transition: { duration: 0.2 } },
+  closed: { opacity: 0, transition: { duration: 0.2 } },
+};
+
+const Sidebar = ({ mobileOpen, onMobileClose }) => {
   const [collapsed, setCollapsed] = useState(false);
   const location = useLocation();
   const { user } = useSelector((state) => state.auth);
@@ -35,14 +45,19 @@ const Sidebar = () => {
     return location.pathname.startsWith(path);
   };
 
-  return (
-    <motion.aside
-      animate={{ width: collapsed ? 72 : 240 }}
-      className="fixed left-0 top-0 h-screen z-40 glass border-r border-white/10 hidden lg:block overflow-hidden"
-    >
+  const handleNavClick = useCallback(() => {
+    if (onMobileClose) onMobileClose();
+  }, [onMobileClose]);
+
+  useEffect(() => {
+    if (mobileOpen && onMobileClose) onMobileClose();
+  }, [location.pathname]);
+
+  const sidebarContent = (
+    <div className="flex flex-col h-full">
       <div className="flex items-center justify-between p-4 border-b border-white/10">
         {!collapsed && (
-          <Link to="/home" className="flex items-center gap-2">
+          <Link to="/home" onClick={handleNavClick} className="flex items-center gap-2">
             <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
               <div className="w-3 h-3 bg-white rounded-sm" />
             </div>
@@ -51,9 +66,15 @@ const Sidebar = () => {
         )}
         <button
           onClick={() => setCollapsed(!collapsed)}
-          className="p-2 rounded-lg hover:bg-white/10 text-gray-400 hover:text-white transition-all"
+          className="hidden lg:flex p-2 rounded-lg hover:bg-white/10 text-gray-400 hover:text-white transition-all"
         >
           {collapsed ? <FaChevronRight size={14} /> : <FaChevronLeft size={14} />}
+        </button>
+        <button
+          onClick={onMobileClose}
+          className="lg:hidden p-2 rounded-lg hover:bg-white/10 text-gray-400 hover:text-white transition-all"
+        >
+          <FaTimes size={16} />
         </button>
       </div>
 
@@ -73,9 +94,9 @@ const Sidebar = () => {
         </div>
       )}
 
-      <nav className="p-3 space-y-1 overflow-y-auto h-[calc(100vh-70px)]">
+      <nav className="p-3 space-y-1 flex-1 overflow-y-auto">
         {menuItems.map((item) => (
-          <Link key={item.path + item.label} to={item.path}>
+          <Link key={item.path + item.label} to={item.path} onClick={handleNavClick}>
             <motion.div
               whileHover={{ x: 3 }}
               className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm transition-all ${
@@ -91,7 +112,42 @@ const Sidebar = () => {
           </Link>
         ))}
       </nav>
-    </motion.aside>
+    </div>
+  );
+
+  return (
+    <>
+      <motion.aside
+        animate={{ width: collapsed ? 72 : 240 }}
+        className="fixed left-0 top-0 h-screen z-40 glass border-r border-white/10 hidden lg:block overflow-hidden"
+      >
+        {sidebarContent}
+      </motion.aside>
+
+      <AnimatePresence>
+        {mobileOpen && (
+          <motion.div
+            key="mobile-overlay"
+            variants={overlayVariants}
+            initial="closed"
+            animate="open"
+            exit="closed"
+            className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm lg:hidden"
+            onClick={onMobileClose}
+          />
+        )}
+      </AnimatePresence>
+
+      <motion.aside
+        key="mobile-sidebar"
+        variants={sidebarVariants}
+        initial="closed"
+        animate={mobileOpen ? 'open' : 'closed'}
+        className="fixed left-0 top-0 h-screen w-72 z-50 glass border-r border-white/10 lg:hidden overflow-hidden"
+      >
+        {sidebarContent}
+      </motion.aside>
+    </>
   );
 };
 

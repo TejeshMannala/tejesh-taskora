@@ -16,7 +16,7 @@ const Tasks = () => {
   const [showModal, setShowModal] = useState(false);
   const [editing, setEditing] = useState(null);
   const [filters, setFilters] = useState({ status: '', priority: '', search: '' });
-  const [form, setForm] = useState({ title: '', subject: '', durationMinutes: 30, priority: 'Medium', date: new Date().toISOString().split('T')[0], dueDate: '', notes: '' });
+  const [form, setForm] = useState({ title: '', subject: '', durationMinutes: 30, priority: 'Medium', date: new Date().toISOString().split('T')[0], dueDate: '', reminderInterval: 5, notes: '' });
 
   useEffect(() => {
     dispatch(fetchTasks(filters));
@@ -34,7 +34,7 @@ const Tasks = () => {
       }
       setShowModal(false);
       setEditing(null);
-      setForm({ title: '', subject: '', durationMinutes: 30, priority: 'Medium', date: new Date().toISOString().split('T')[0], dueDate: '', notes: '' });
+      setForm({ title: '', subject: '', durationMinutes: 30, priority: 'Medium', date: new Date().toISOString().split('T')[0], dueDate: '', reminderInterval: 5, notes: '' });
     } catch (err) {
       toast.error(err || 'Failed to save task');
     }
@@ -42,7 +42,7 @@ const Tasks = () => {
 
   const handleEdit = (task) => {
     setEditing(task);
-    setForm({ title: task.title, subject: task.subject || '', durationMinutes: task.durationMinutes, priority: task.priority, date: new Date(task.date).toISOString().split('T')[0], dueDate: task.dueDate ? new Date(task.dueDate).toISOString().slice(0, 16) : '', notes: task.notes || '' });
+    setForm({ title: task.title, subject: task.subject || '', durationMinutes: task.durationMinutes, priority: task.priority, date: new Date(task.date).toISOString().split('T')[0], dueDate: task.dueDate ? new Date(task.dueDate).toISOString().slice(0, 16) : '', reminderInterval: task.reminderInterval || 5, notes: task.notes || '' });
     setShowModal(true);
   };
 
@@ -80,7 +80,7 @@ const Tasks = () => {
         <motion.button
           whileHover={{ scale: 1.05 }}
           whileTap={{ scale: 0.95 }}
-          onClick={() => { setEditing(null); setForm({ title: '', subject: '', durationMinutes: 30, priority: 'Medium', date: new Date().toISOString().split('T')[0], dueDate: '', notes: '' }); setShowModal(true); }}
+          onClick={() => { setEditing(null); setForm({ title: '', subject: '', durationMinutes: 30, priority: 'Medium', date: new Date().toISOString().split('T')[0], dueDate: '', reminderInterval: 5, notes: '' }); setShowModal(true); }}
           className="flex items-center gap-2 px-6 py-3 rounded-xl bg-primary hover:bg-accent text-white font-medium transition-all shadow-lg shadow-primary/30"
         >
           <FaPlus /> New Task
@@ -165,9 +165,21 @@ const Tasks = () => {
               <input type="date" required value={form.date} onChange={(e) => setForm(f => ({ ...f, date: e.target.value }))} className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-primary" />
             </div>
           </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-300 mb-2">Due Date (for alarm)</label>
-            <input type="datetime-local" value={form.dueDate} onChange={(e) => setForm(f => ({ ...f, dueDate: e.target.value }))} className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-primary" />
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">Due Date & Time (for alarm)</label>
+              <input type="datetime-local" value={form.dueDate} onChange={(e) => setForm(f => ({ ...f, dueDate: e.target.value }))} className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-primary" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">Remind Again Every</label>
+              <Select value={form.reminderInterval} onChange={(e) => setForm(f => ({ ...f, reminderInterval: parseInt(e.target.value) }))}>
+                <option value={5}>5 Minutes</option>
+                <option value={10}>10 Minutes</option>
+                <option value={25}>25 Minutes</option>
+                <option value={45}>45 Minutes</option>
+                <option value={60}>1 Hour</option>
+              </Select>
+            </div>
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-300 mb-2">Notes</label>

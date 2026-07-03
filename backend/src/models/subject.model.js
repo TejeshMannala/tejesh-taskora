@@ -32,6 +32,15 @@ const subjectSchema = new mongoose.Schema(
       type: Number,
       default: 40,
     },
+    semester: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Semester',
+    },
+    completed: {
+      type: Boolean,
+      default: false,
+    },
+    completedAt: Date,
   },
   {
     timestamps: true,

@@ -10,7 +10,10 @@ const groupSchema = new mongoose.Schema(
     educationType: {
       type: String,
       required: true,
-      enum: ['Intermediate', 'Degree', 'B.Tech'],
+    },
+    education: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Education',
     },
     description: {
       type: String,

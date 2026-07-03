@@ -5,17 +5,7 @@ export const adminApi = {
   getProfile: () => api.get('/api/v1/admin/profile').then(r => r.data),
   getDashboard: () => api.get('/api/v1/admin/dashboard').then(r => r.data),
 
-  getDegrees: () => api.get('/api/v1/admin/degrees').then(r => r.data),
-  createDegree: (data) => api.post('/api/v1/admin/degrees', data).then(r => r.data),
-  updateDegree: (id, data) => api.put(`/api/v1/admin/degrees/${id}`, data).then(r => r.data),
-  deleteDegree: (id) => api.delete(`/api/v1/admin/degrees/${id}`).then(r => r.data),
-
-  getCourses: () => api.get('/api/v1/admin/courses').then(r => r.data),
-  createCourse: (data) => api.post('/api/v1/admin/courses', data).then(r => r.data),
-  updateCourse: (id, data) => api.put(`/api/v1/admin/courses/${id}`, data).then(r => r.data),
-  deleteCourse: (id) => api.delete(`/api/v1/admin/courses/${id}`).then(r => r.data),
-
-  getGroups: (courseId) => api.get(`/api/v1/admin/groups${courseId ? `/${courseId}` : ''}`).then(r => r.data),
+  getGroups: (educationType) => api.get(`/api/v1/admin/groups${educationType ? `?educationType=${encodeURIComponent(educationType)}` : ''}`).then(r => r.data),
   createGroup: (data) => api.post('/api/v1/admin/groups', data).then(r => r.data),
   updateGroup: (id, data) => api.put(`/api/v1/admin/groups/${id}`, data).then(r => r.data),
   deleteGroup: (id) => api.delete(`/api/v1/admin/groups/${id}`).then(r => r.data),

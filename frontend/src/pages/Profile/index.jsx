@@ -1,15 +1,18 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { motion } from 'framer-motion';
-import { FaEnvelope, FaGraduationCap, FaBook, FaCalendar, FaSave, FaCamera, FaSpinner, FaCheckCircle, FaLock } from 'react-icons/fa';
+import { FaEnvelope, FaGraduationCap, FaUniversity, FaSave, FaCamera, FaSpinner, FaLock, FaUser, FaSchool, FaBookOpen, FaCheckCircle, FaCalendarAlt } from 'react-icons/fa';
 import toast from 'react-hot-toast';
 import { PageSkeleton } from '../../components/ui/LoadingSkeleton';
 import UploadPopup from '../../components/ui/UploadPopup';
 import { userApi } from '../../services/userApi';
 import { academicApi } from '../../services/academicApi';
+import { FALLBACK_EDUCATION_TYPES } from '../../constants/academic';
+import { semesterApi } from '../../services/semesterApi';
 import { useDispatch } from 'react-redux';
 import { updateUser } from '../../redux/slices/authSlice';
 import Select from '../../components/ui/Select';
 import BackButton from '../../components/ui/BackButton';
+import AcademicTimeline from '../../components/academic/AcademicTimeline';
 
 const Profile = () => {
   const dispatch = useDispatch();
@@ -20,78 +23,110 @@ const Profile = () => {
   const [uploadStatus, setUploadStatus] = useState('idle');
   const [uploadMessage, setUploadMessage] = useState('');
   const [uploadProgress, setUploadProgress] = useState(0);
+  const [educationTypes, setEducationTypes] = useState([]);
   const [groups, setGroups] = useState([]);
-  const [years, setYears] = useState([]);
-  const [academicYears, setAcademicYears] = useState([]);
-  const [form, setForm] = useState({});
+  const [groupsLoading, setGroupsLoading] = useState(false);
+  const [form, setForm] = useState({
+    name: '',
+    college: '',
+    university: '',
+    educationType: '',
+    group: '',
+    profilePicture: '',
+    profileLocked: false,
+  });
   const [previewImage, setPreviewImage] = useState(null);
+  const [errors, setErrors] = useState({});
+  const [semesters, setSemesters] = useState([]);
+  const [semestersLoading, setSemestersLoading] = useState(false);
   const fileInputRef = useRef(null);
 
-  useEffect(() => {
-    loadProfile();
-  }, []);
-
-  useEffect(() => {
-    if (!form.educationType) { setGroups([]); setYears([]); return; }
-    loadGroups(form.educationType);
-    generateYears(form.educationType);
+  const loadSemesters = useCallback(async () => {
+    if (!form.educationType) return;
+    setSemestersLoading(true);
+    try {
+      const data = await semesterApi.getAll();
+      setSemesters(data.semesters || []);
+    } catch {
+      setSemesters([]);
+    } finally {
+      setSemestersLoading(false);
+    }
   }, [form.educationType]);
 
-  const generateYears = (educationType) => {
-    if (educationType === 'Intermediate') {
-      setYears(['1st Year', '2nd Year']);
-    } else if (educationType === 'Degree') {
-      setYears(['1st Year', '2nd Year', '3rd Year']);
-    } else if (educationType === 'B.Tech') {
-      setYears(['1st Year', '2nd Year', '3rd Year', '4th Year']);
-    } else {
-      setYears([]);
-    }
-  };
-
-  useEffect(() => {
-    const currentYear = new Date().getFullYear();
-    const yearsList = [];
-    for (let i = -1; i < 4; i++) {
-      const start = currentYear + i;
-      yearsList.push(`${start}-${start + 1}`);
-    }
-    setAcademicYears(yearsList);
-  }, []);
-
-  const loadGroups = async (educationType) => {
+  const loadProfile = useCallback(async () => {
     try {
-      console.log('[Profile] Loading groups for:', educationType);
-      const data = await academicApi.getGroups(educationType);
-      console.log('[Profile] Groups loaded:', data.groups?.length || 0);
-      setGroups(data.groups || []);
-    } catch (err) {
-      console.error('[Profile] Failed to load groups:', err);
-      setGroups([]);
-    }
-  };
-
-  const loadProfile = async () => {
-    try {
-      const data = await userApi.getProfile();
+      const [profileData, typesData] = await Promise.all([
+        userApi.getProfile(),
+        academicApi.getEducationTypes().catch(() => ({ educationTypes: FALLBACK_EDUCATION_TYPES })),
+      ]);
+      const data = profileData;
       setProfile(data.user);
+      setEducationTypes(typesData.educationTypes || FALLBACK_EDUCATION_TYPES);
       const pic = data.user.profilePicture || data.user.avatar || '';
       setForm({
         name: data.user.name || '',
         college: data.user.college || '',
+        university: data.user.university || '',
         group: data.user.group?._id || data.user.group || '',
         educationType: data.user.educationType || '',
-        semesterYear: data.user.semesterYear || data.user.year || '',
-        academicYear: data.user.academicYear || '',
         profilePicture: pic,
         profileLocked: data.user.profileLocked || false,
       });
       setPreviewImage(pic);
-    } catch {
-      toast.error('Failed to load profile');
+    } catch (err) {
+      const msg = err?.response?.status === 401
+        ? 'Session expired. Please login again.'
+        : err?.response?.status === 404
+          ? 'User profile not found.'
+          : err?.code === 'ECONNABORTED'
+            ? 'Request timed out. Server may be unavailable.'
+            : err?.code === 'ERR_NETWORK'
+              ? 'Network error. Unable to reach the server.'
+              : 'Failed to load profile. Please try again.';
+      toast.error(msg);
     } finally {
       setLoading(false);
     }
+  }, []);
+
+  useEffect(() => {
+    loadProfile();
+  }, [loadProfile]);
+
+  useEffect(() => {
+    if (profile) loadSemesters();
+  }, [profile, loadSemesters]);
+
+  useEffect(() => {
+    if (!form.educationType) {
+      setGroups([]);
+      return;
+    }
+    let cancelled = false;
+    const load = async () => {
+      setGroupsLoading(true);
+      try {
+        const data = await academicApi.getGroups(form.educationType);
+        if (!cancelled) setGroups(data.groups || []);
+      } catch {
+        if (!cancelled) setGroups([]);
+      } finally {
+        if (!cancelled) setGroupsLoading(false);
+      }
+    };
+    load();
+    return () => { cancelled = true; };
+  }, [form.educationType]);
+
+  const validate = () => {
+    const errs = {};
+    if (!form.name.trim()) errs.name = 'Full name is required';
+    if (!form.college.trim()) errs.college = 'College name is required';
+    if (!form.educationType) errs.educationType = 'Education type is required';
+    if (!form.group) errs.group = 'Group or branch is required';
+    setErrors(errs);
+    return Object.keys(errs).length === 0;
   };
 
   const handleImageSelect = async (e) => {
@@ -123,7 +158,6 @@ const Profile = () => {
     }, 300);
 
     try {
-      console.log("File:", file.name, file.type, file.size);
       const formData = new FormData();
       formData.append('image', file);
       const result = await userApi.uploadProfileImage(formData);
@@ -150,20 +184,25 @@ const Profile = () => {
   };
 
   const handleSave = async () => {
-    if (!form.profileLocked && (!form.name?.trim() || !form.college?.trim() || !form.educationType || !form.group || !form.academicYear?.trim())) {
+    if (!validate()) {
+      toast.error('Please fix the highlighted errors');
+      return;
+    }
+    if (!form.profileLocked && (!form.name?.trim() || !form.college?.trim() || !form.educationType || !form.group)) {
       toast.error('Please complete all required profile fields');
       return;
     }
     setSaving(true);
     try {
-      const payload = {
-        name: form.name,
-        college: form.college,
-        educationType: form.educationType,
-        group: form.group,
-        semesterYear: form.semesterYear || form.academicYear,
-        academicYear: form.academicYear,
-      };
+      const payload = form.profileLocked
+        ? { name: form.name }
+        : {
+            name: form.name,
+            college: form.college,
+            university: form.university,
+            educationType: form.educationType,
+            group: form.group,
+          };
       const data = await userApi.updateProfile(payload);
       dispatch(updateUser(data.user));
       toast.success(data.message || 'Profile updated');
@@ -175,15 +214,15 @@ const Profile = () => {
     }
   };
 
-  if (loading) return <PageSkeleton />;
-  if (!profile) return <div className="text-center text-gray-500 py-20">Profile not found</div>;
-
   const getApiUrl = (path) => {
     if (!path) return '';
     if (path.startsWith('http') || path.startsWith('data:')) return path;
     const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000';
     return `${baseUrl}${path}`;
   };
+
+  if (loading) return <PageSkeleton />;
+  if (!profile) return <div className="text-center text-gray-500 py-20">Profile not found</div>;
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="max-w-4xl mx-auto space-y-8">
@@ -197,19 +236,19 @@ const Profile = () => {
       <div className="glass-card p-8 relative overflow-hidden">
         <div className="absolute top-0 right-0 w-64 h-64 bg-gradient-to-br from-primary/20 to-secondary/10 rounded-full translate-x-1/2 -translate-y-1/2" />
         <div className="relative z-10 flex flex-col md:flex-row items-center gap-8">
-          <div className="relative group">
+          <div className="relative group shrink-0">
             <div className="w-28 h-28 rounded-full bg-gradient-to-br from-primary to-accent flex items-center justify-center text-4xl font-bold text-white overflow-hidden">
               {previewImage ? (
-                <img src={getApiUrl(previewImage)} alt={profile.name} className="h-full w-full rounded-full object-cover" />
+                <img src={getApiUrl(previewImage)} alt={profile.name} className="h-full w-full object-cover" />
               ) : (
                 profile.name?.charAt(0) || 'U'
               )}
-              {form.profileLocked && (
-                <div className="absolute top-0 right-0 bg-primary/80 rounded-full p-1.5">
-                  <FaLock size={12} className="text-white" />
-                </div>
-              )}
             </div>
+            {form.profileLocked && (
+              <div className="absolute -top-1 -right-1 bg-primary/80 rounded-full p-1.5">
+                <FaLock size={12} className="text-white" />
+              </div>
+            )}
             {uploading && (
               <div className="absolute inset-0 rounded-full bg-black/60 flex items-center justify-center">
                 <FaSpinner className="animate-spin text-white text-xl" />
@@ -231,26 +270,19 @@ const Profile = () => {
             </button>
           </div>
           <div className="flex-1 text-center md:text-left">
-            <input
-              type="text"
-              value={form.name}
-              onChange={(e) => setForm(f => ({ ...f, name: e.target.value }))}
-              disabled={form.profileLocked}
-              className="text-3xl font-bold bg-transparent border-b border-transparent hover:border-white/20 focus:border-primary outline-none text-white w-full transition-colors disabled:opacity-60"
-              placeholder="Your full name"
-            />
+            <h1 className="text-3xl font-bold text-white">{form.name || 'Your Name'}</h1>
             <p className="text-gray-400 flex items-center gap-2 justify-center md:justify-start mt-2">
               <FaEnvelope /> {profile.email}
             </p>
             <div className="flex flex-wrap gap-4 mt-4 justify-center md:justify-start">
               <span className="px-3 py-1 rounded-full bg-white/5 text-gray-300 text-sm flex items-center gap-1">
-                <FaGraduationCap /> {form.college || 'College not set'}
+                <FaSchool /> {form.college || 'College not set'}
               </span>
               <span className="px-3 py-1 rounded-full bg-white/5 text-gray-300 text-sm flex items-center gap-1">
-                <FaBook /> {form.educationType || 'Education not set'}
+                <FaUniversity /> {form.university || 'University not set'}
               </span>
               <span className="px-3 py-1 rounded-full bg-white/5 text-gray-300 text-sm flex items-center gap-1">
-                <FaCalendar /> {form.academicYear || 'Year not set'}
+                <FaGraduationCap /> {form.educationType || 'Education not set'}
               </span>
             </div>
           </div>
@@ -286,83 +318,141 @@ const Profile = () => {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div>
             <label className="block text-sm text-gray-400 mb-1">Full Name *</label>
-            <input
-              type="text"
-              value={form.name}
-              onChange={(e) => setForm(f => ({ ...f, name: e.target.value }))}
-              className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-2.5 text-white outline-none focus:border-primary transition-colors"
-              placeholder="Your full name"
-            />
+            <div className="relative">
+              <FaUser className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm" />
+              <input
+                type="text"
+                value={form.name}
+                onChange={(e) => { setForm(f => ({ ...f, name: e.target.value })); setErrors(prev => ({ ...prev, name: '' })); }}
+                className={`w-full bg-white/5 border rounded-lg pl-10 pr-4 py-2.5 text-white outline-none transition-colors ${errors.name ? 'border-red-500' : 'border-white/10 focus:border-primary'}`}
+                placeholder="Your full name"
+              />
+            </div>
+            {errors.name && <p className="text-red-400 text-xs mt-1">{errors.name}</p>}
           </div>
           <div>
             <label className="block text-sm text-gray-400 mb-1">Email</label>
-            <input
-              type="email"
-              value={profile.email}
-              disabled
-              className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-2.5 text-gray-400 cursor-not-allowed"
-            />
+            <div className="relative">
+              <FaEnvelope className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm" />
+              <input
+                type="email"
+                value={profile.email}
+                disabled
+                className="w-full bg-white/5 border border-white/10 rounded-lg pl-10 pr-4 py-2.5 text-gray-400 cursor-not-allowed"
+              />
+            </div>
           </div>
           <div>
             <label className="block text-sm text-gray-400 mb-1">College Name *</label>
-            <input
-              type="text"
-              value={form.college}
-              onChange={(e) => setForm(f => ({ ...f, college: e.target.value }))}
-              disabled={form.profileLocked}
-              className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-2.5 text-white outline-none focus:border-primary transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
-              placeholder={form.profileLocked ? 'Locked' : 'Your college name'}
-            />
+            <div className="relative">
+              <FaSchool className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm" />
+              <input
+                type="text"
+                value={form.college}
+                onChange={(e) => { setForm(f => ({ ...f, college: e.target.value })); setErrors(prev => ({ ...prev, college: '' })); }}
+                disabled={form.profileLocked}
+                className={`w-full bg-white/5 border rounded-lg pl-10 pr-4 py-2.5 text-white outline-none transition-colors disabled:opacity-60 disabled:cursor-not-allowed ${errors.college ? 'border-red-500' : 'border-white/10 focus:border-primary'}`}
+                placeholder={form.profileLocked ? 'Locked' : 'Your college name'}
+              />
+            </div>
+            {errors.college && <p className="text-red-400 text-xs mt-1">{errors.college}</p>}
+          </div>
+          <div>
+            <label className="block text-sm text-gray-400 mb-1">University Name *</label>
+            <div className="relative">
+              <FaUniversity className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm" />
+              <input
+                type="text"
+                value={form.university}
+                onChange={(e) => { setForm(f => ({ ...f, university: e.target.value })); setErrors(prev => ({ ...prev, university: '' })); }}
+                disabled={form.profileLocked}
+                className={`w-full bg-white/5 border rounded-lg pl-10 pr-4 py-2.5 text-white outline-none transition-colors disabled:opacity-60 disabled:cursor-not-allowed ${errors.university ? 'border-red-500' : 'border-white/10 focus:border-primary'}`}
+                placeholder={form.profileLocked ? 'Locked' : 'Your university name'}
+              />
+            </div>
+            {errors.university && <p className="text-red-400 text-xs mt-1">{errors.university}</p>}
           </div>
           <div>
             <label className="block text-sm text-gray-400 mb-1">Education Type *</label>
             <Select
               value={form.educationType}
-              onChange={(e) => setForm(f => ({ ...f, educationType: e.target.value, group: '', academicYear: '' }))}
+              onChange={(e) => { setForm(f => ({ ...f, educationType: e.target.value, group: '' })); setErrors(prev => ({ ...prev, educationType: '' })); }}
               disabled={form.profileLocked}
               placeholder={form.profileLocked ? 'Locked' : 'Select education type'}
-              options={['Intermediate', 'Degree', 'B.Tech']}
+              options={educationTypes}
+              className={errors.educationType ? 'border-red-500' : ''}
             />
+            {errors.educationType && <p className="text-red-400 text-xs mt-1">{errors.educationType}</p>}
           </div>
           <div>
             <label className="block text-sm text-gray-400 mb-1">Group / Branch *</label>
-            <Select
-              value={form.group}
-              onChange={(e) => setForm(f => ({ ...f, group: e.target.value }))}
-              disabled={!form.educationType || form.profileLocked}
-              placeholder={!form.educationType ? 'Select education type first' : form.profileLocked ? 'Locked' : 'Select group'}
-            >
-              {groups.map((g) => (
-                <option key={g._id} value={g._id}>{g.name}</option>
-              ))}
-            </Select>
-          </div>
-          <div>
-            <label className="block text-sm text-gray-400 mb-1">Semester / Year</label>
-            <input
-              type="text"
-              value={form.semesterYear}
-              onChange={(e) => setForm(f => ({ ...f, semesterYear: e.target.value }))}
-              disabled={form.profileLocked}
-              className="w-full bg-white/5 border border-white/10 rounded-lg px-4 py-2.5 text-white outline-none focus:border-primary transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
-              placeholder={form.profileLocked ? 'Locked' : '1st Year / Semester 1'}
-            />
-          </div>
-          <div>
-            <label className="block text-sm text-gray-400 mb-1">Academic Year *</label>
-            <Select
-              value={form.academicYear}
-              onChange={(e) => setForm(f => ({ ...f, academicYear: e.target.value }))}
-              disabled={!form.educationType || form.profileLocked}
-              placeholder={!form.educationType ? 'Select education type first' : form.profileLocked ? 'Locked' : 'Select year range'}
-            >
-              {academicYears.map((year) => (
-                <option key={year} value={year}>{year}</option>
-              ))}
-            </Select>
+            {groupsLoading ? (
+              <div className="flex items-center gap-2 bg-white/5 border border-white/10 rounded-lg px-4 py-2.5 text-gray-400">
+                <FaSpinner className="animate-spin text-sm" /> Loading groups...
+              </div>
+            ) : !groups.length && form.educationType && !form.profileLocked ? (
+              <div className="bg-white/5 border border-yellow-500/30 rounded-lg px-4 py-2.5 text-yellow-300 text-sm">
+                No groups found for &quot;{form.educationType}&quot;. Please select a different Education Type.
+              </div>
+            ) : (
+              <Select
+                value={form.group}
+                onChange={(e) => { setForm(f => ({ ...f, group: e.target.value })); setErrors(prev => ({ ...prev, group: '' })); }}
+                disabled={!form.educationType || form.profileLocked}
+                placeholder={!form.educationType ? 'Select education type first' : form.profileLocked ? 'Locked' : 'Select group'}
+                className={errors.group ? 'border-red-500' : ''}
+              >
+                {groups.map((g) => (
+                  <option key={g._id} value={g._id}>{g.name}</option>
+                ))}
+              </Select>
+            )}
+            {errors.group && <p className="text-red-400 text-xs mt-1">{errors.group}</p>}
           </div>
         </div>
       </div>
+
+      {form.educationType && (
+        <div className="glass-card p-8">
+          <div className="flex items-center gap-3 mb-6">
+            <FaCalendarAlt className="text-primary" size={20} />
+            <h2 className="text-xl font-bold text-white">Academic Progress</h2>
+          </div>
+          {semestersLoading ? (
+            <div className="flex items-center justify-center py-8">
+              <FaSpinner className="animate-spin text-primary text-xl" />
+            </div>
+          ) : (
+            <AcademicTimeline semesters={semesters} educationType={form.educationType} />
+          )}
+        </div>
+      )}
+
+      {semesters.filter(s => s.status === 'active').length > 0 && (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="glass-card p-6 text-center">
+            <FaBookOpen className="text-primary text-2xl mx-auto mb-2" />
+            <div className="text-lg font-bold text-white">
+              {semesters.filter(s => s.status === 'completed').length}/{semesters.length}
+            </div>
+            <p className="text-gray-400 text-sm mt-1">Semesters Completed</p>
+          </div>
+          <div className="glass-card p-6 text-center">
+            <FaCheckCircle className="text-secondary text-2xl mx-auto mb-2" />
+            <div className="text-lg font-bold text-white">
+              {Math.round((semesters.filter(s => s.status === 'completed').length / Math.max(semesters.length, 1)) * 100)}%
+            </div>
+            <p className="text-gray-400 text-sm mt-1">Overall Progress</p>
+          </div>
+          <div className="glass-card p-6 text-center">
+            <FaGraduationCap className="text-accent text-2xl mx-auto mb-2" />
+            <div className="text-lg font-bold text-white">
+              {profile.totalStudyHours?.toFixed(1) || 0}h
+            </div>
+            <p className="text-gray-400 text-sm mt-1">Total Study Hours</p>
+          </div>
+        </div>
+      )}
     </motion.div>
   );
 };

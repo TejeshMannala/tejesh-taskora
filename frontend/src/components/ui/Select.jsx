@@ -35,7 +35,7 @@ const Select = ({
             {placeholder}
           </option>
         )}
-        {options
+        {Array.isArray(options) && options.length > 0
           ? options.map((opt) => {
               const label = typeof opt === 'string' ? opt : opt.label;
               const val = typeof opt === 'string' ? opt : opt.value;

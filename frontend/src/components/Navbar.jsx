@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { FaSearch, FaBell, FaMoon, FaSun, FaUser, FaCog, FaQuestionCircle, FaSignOutAlt, FaArrowLeft } from 'react-icons/fa';
+import { FaSearch, FaBell, FaMoon, FaSun, FaUser, FaCog, FaQuestionCircle, FaSignOutAlt, FaArrowLeft, FaBars } from 'react-icons/fa';
 import { useSelector, useDispatch } from 'react-redux';
 import { logout } from '../redux/slices/authSlice';
 import { searchApi } from '../services/searchApi';
@@ -16,7 +16,7 @@ const getApiUrl = (path) => {
   return `${baseUrl}${path}`;
 };
 
-const Navbar = () => {
+const Navbar = ({ onMenuToggle }) => {
   const { isAuthenticated, user } = useSelector((state) => state.auth);
   const dispatch = useDispatch();
   const navigate = useNavigate();
@@ -30,6 +30,9 @@ const Navbar = () => {
   const profileRef = useRef(null);
 
   const profilePic = user?.profilePicture || user?.avatar || '';
+
+  const [isClient, setIsClient] = useState(false);
+  useEffect(() => { setIsClient(true); }, []);
 
   useEffect(() => {
     if (isAuthenticated) { loadUnreadCount(); }
@@ -79,11 +82,11 @@ const Navbar = () => {
     setSearchQuery('');
   };
 
-  const isAuthPage = location.pathname === '/login' || location.pathname === '/signup';
+  const isAuthPage = location.pathname === '/login' || location.pathname === '/signup' || location.pathname === '/';
 
   if (!isAuthenticated || isAuthPage) {
     return (
-      <nav className="fixed w-full z-50 glass px-6 py-4 flex justify-between items-center">
+      <nav className="fixed w-full z-30 glass px-6 py-4 flex justify-between items-center">
         <Link to="/" className="flex items-center gap-2">
           <div className="w-8 h-8 rounded-lg border-2 border-primary flex items-center justify-center">
             <div className="w-3 h-3 bg-accent rounded-sm" />
@@ -101,7 +104,23 @@ const Navbar = () => {
   return (
     <nav className="fixed top-0 left-0 lg:left-60 right-0 z-30 glass px-4 md:px-8 py-3 flex items-center justify-between gap-4 transition-all duration-300">
       <div className="flex items-center gap-4 flex-1">
-        <button onClick={() => navigate(-1)} className="p-2 rounded-xl hover:bg-white/10 text-gray-400 hover:text-white transition-all lg:hidden">
+        <button
+          onClick={onMenuToggle}
+          className="lg:hidden p-2 rounded-xl hover:bg-white/10 text-gray-400 hover:text-white transition-all"
+          aria-label="Toggle menu"
+        >
+          <FaBars size={18} />
+        </button>
+        <button
+          onClick={() => {
+            if (window.history.length > 1) {
+              navigate(-1);
+            } else {
+              navigate('/home');
+            }
+          }}
+          className="hidden md:flex p-2 rounded-xl hover:bg-white/10 text-gray-400 hover:text-white transition-all"
+        >
           <FaArrowLeft size={18} />
         </button>
         <div className="relative flex-1 max-w-md hidden md:block">
@@ -137,7 +156,7 @@ const Navbar = () => {
 
       <div className="flex items-center gap-3">
         <button onClick={toggleTheme} className="p-2.5 rounded-xl hover:bg-white/10 text-gray-400 hover:text-white transition-all">
-          {theme === 'dark' ? <FaSun size={16} /> : <FaMoon size={16} />}
+          {isClient && theme === 'dark' ? <FaSun size={16} /> : <FaMoon size={16} />}
         </button>
         <Link to="/notifications" className="relative p-2.5 rounded-xl hover:bg-white/10 text-gray-400 hover:text-white transition-all">
           <FaBell size={16} />

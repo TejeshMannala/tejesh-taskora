@@ -105,14 +105,18 @@ export const initializeSocket = (server) => {
       io.to(data.userId).emit('notification', data);
     });
 
-    // Alarm acknowledgment (snooze for 5 min)
+    // Alarm acknowledgment (snooze for selected interval)
     socket.on('alarm:snooze', async (data) => {
       try {
         const { default: Task } = await import('../models/task.model.js');
         const task = await Task.findOne({ _id: data.taskId, user: socket.user._id });
         if (task) {
-          task.alarmStartedAt = new Date(Date.now() + 5 * 60 * 1000);
+          const interval = task.reminderInterval || 5;
+          task.nextReminderAt = new Date(Date.now() + interval * 60000);
+          task.alarmTriggered = false;
+          task.alarmActive = false;
           await task.save();
+          io.to(socket.user._id.toString()).emit('alarm:stopped', { taskId: task._id });
         }
       } catch (err) {
         console.error('alarm:snooze error:', err.message);

@@ -4,30 +4,31 @@ import { FaBook, FaBookOpen, FaEdit, FaGraduationCap, FaPlus, FaSpinner, FaTrash
 import toast from 'react-hot-toast';
 import { adminApi } from '../services/adminApi';
 
+const EDUCATION_TYPES = ['Intermediate', 'Degree', 'B.Tech'];
+
 const emptyForms = {
-  degree: { name: '', description: '' },
-  course: { name: '', description: '', degree: '' },
-  subject: { name: '', description: '', course: '', color: '#7c3aed' },
+  educationType: { name: '', description: '' },
+  group: { name: '', description: '', educationType: '' },
+  subject: { name: '', description: '', educationType: '', group: '', color: '#7c3aed' },
 };
 
 const Courses = () => {
-  const [degrees, setDegrees] = useState([]);
-  const [courses, setCourses] = useState([]);
+  const [educationTypes] = useState(EDUCATION_TYPES);
+  const [groups, setGroups] = useState([]);
   const [subjects, setSubjects] = useState([]);
   const [loading, setLoading] = useState(true);
   const [modal, setModal] = useState(null);
-  const [form, setForm] = useState(emptyForms.degree);
+  const [form, setForm] = useState(emptyForms.subject);
+  const [activeTab, setActiveTab] = useState('subjects');
 
   const load = async () => {
     setLoading(true);
     try {
-      const [degreeData, courseData, subjectData] = await Promise.all([
-        adminApi.getDegrees(),
-        adminApi.getCourses(),
+      const [groupData, subjectData] = await Promise.all([
+        adminApi.getGroups(),
         adminApi.getSubjects(),
       ]);
-      setDegrees(degreeData.degrees || []);
-      setCourses(courseData.courses || []);
+      setGroups(groupData.groups || []);
       setSubjects(subjectData.subjects || []);
     } catch {
       toast.error('Failed to load education catalog');
@@ -38,28 +39,39 @@ const Courses = () => {
 
   useEffect(() => { load(); }, []);
 
-  const courseCountByDegree = useMemo(() => courses.reduce((acc, course) => {
-    const degreeId = course.degree?._id || course.degree;
-    acc[degreeId] = (acc[degreeId] || 0) + 1;
-    return acc;
-  }, {}), [courses]);
-
-  const subjectCountByCourse = useMemo(() => subjects.reduce((acc, subject) => {
-    const courseId = subject.course?._id || subject.course;
-    acc[courseId] = (acc[courseId] || 0) + 1;
+  const subjectCountByGroup = useMemo(() => subjects.reduce((acc, subject) => {
+    const groupId = subject.group?._id || subject.group;
+    acc[groupId] = (acc[groupId] || 0) + 1;
     return acc;
   }, {}), [subjects]);
 
-  const openCreate = (type) => {
+  const groupCountByType = useMemo(() => groups.reduce((acc, group) => {
+    acc[group.educationType] = (acc[group.educationType] || 0) + 1;
+    return acc;
+  }, {}), [groups]);
+
+  const openCreate = async (type) => {
     setModal({ type, item: null });
-    setForm(emptyForms[type]);
+    if (type === 'subject') {
+      setForm(emptyForms.subject);
+    } else if (type === 'group') {
+      setForm(emptyForms.group);
+    }
   };
 
-  const openEdit = (type, item) => {
+  const openEdit = async (type, item) => {
     setModal({ type, item });
-    if (type === 'degree') setForm({ name: item.name, description: item.description || '' });
-    if (type === 'course') setForm({ name: item.name, description: item.description || '', degree: item.degree?._id || item.degree || '' });
-    if (type === 'subject') setForm({ name: item.name, description: item.description || '', course: item.course?._id || item.course || '', color: item.color || '#7c3aed' });
+    if (type === 'group') {
+      setForm({ name: item.name, description: item.description || '', educationType: item.educationType || '' });
+    } else if (type === 'subject') {
+      setForm({
+        name: item.name,
+        description: item.description || '',
+        educationType: item.group?.educationType || '',
+        group: item.group?._id || '',
+        color: item.color || '#7c3aed',
+      });
+    }
   };
 
   const save = async (e) => {
@@ -93,59 +105,106 @@ const Courses = () => {
     return <div className="flex items-center gap-2 p-8 text-white"><FaSpinner className="animate-spin" /> Loading education catalog...</div>;
   }
 
+  const tabs = [
+    { key: 'educationTypes', label: 'Education Types' },
+    { key: 'groups', label: 'Groups' },
+    { key: 'subjects', label: 'Subjects' },
+  ];
+
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-8">
       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div>
           <h1 className="text-3xl font-bold text-white">Education Management</h1>
-          <p className="mt-1 text-gray-400">Manage degrees, courses, and subjects.</p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <ActionButton onClick={() => openCreate('degree')} icon={<FaPlus />} label="Add Degree" />
-          <ActionButton onClick={() => openCreate('course')} icon={<FaPlus />} label="Add Course" />
-          <ActionButton onClick={() => openCreate('subject')} icon={<FaPlus />} label="Add Subject" />
+          <p className="mt-1 text-gray-400">Manage education types, groups, and subjects.</p>
         </div>
       </div>
 
-      <Section title="Degrees" icon={<FaGraduationCap />} items={degrees} empty="No degrees yet.">
-        {(degree) => (
-          <CatalogCard
-            key={degree._id}
-            title={degree.name}
-            subtitle={`${courseCountByDegree[degree._id] || 0} courses`}
-            description={degree.description}
-            onEdit={() => openEdit('degree', degree)}
-            onDelete={() => remove('degree', degree)}
-          />
-        )}
-      </Section>
+      <div className="flex gap-1 bg-white/5 rounded-xl p-1 border border-white/10">
+        {tabs.map((tab) => (
+          <button
+            key={tab.key}
+            onClick={() => setActiveTab(tab.key)}
+            className={`flex-1 px-4 py-2.5 rounded-lg text-sm font-medium transition-all ${
+              activeTab === tab.key ? 'bg-primary text-white' : 'text-gray-400 hover:text-white'
+            }`}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
 
-      <Section title="Courses" icon={<FaBook />} items={courses} empty="No courses yet.">
-        {(course) => (
-          <CatalogCard
-            key={course._id}
-            title={course.name}
-            subtitle={`${course.degree?.name || 'No degree'} / ${subjectCountByCourse[course._id] || 0} subjects`}
-            description={course.description}
-            onEdit={() => openEdit('course', course)}
-            onDelete={() => remove('course', course)}
-          />
-        )}
-      </Section>
+      {activeTab === 'educationTypes' && (
+        <Section title="Education Types" icon={<FaGraduationCap />} items={educationTypes} empty="No education types.">
+          {(et) => (
+            <CatalogCard
+              key={et}
+              title={et}
+              subtitle={`${groupCountByType[et] || 0} groups`}
+              description=""
+              onEdit={null}
+              onDelete={null}
+            />
+          )}
+        </Section>
+      )}
 
-      <Section title="Subjects" icon={<FaBookOpen />} items={subjects} empty="No subjects yet.">
-        {(subject) => (
-          <CatalogCard
-            key={subject._id}
-            title={subject.name}
-            subtitle={`${subject.course?.degree?.name || ''}${subject.course?.degree?.name ? ' / ' : ''}${subject.course?.name || 'No course'}`}
-            description={subject.description}
-            color={subject.color}
-            onEdit={() => openEdit('subject', subject)}
-            onDelete={() => remove('subject', subject)}
-          />
-        )}
-      </Section>
+      {activeTab === 'groups' && (
+        <div>
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2 text-white">
+              <FaBook /><h2 className="text-xl font-semibold">Groups</h2>
+              <span className="rounded-full bg-white/10 px-2 py-0.5 text-xs text-gray-300">{groups.length}</span>
+            </div>
+            <ActionButton onClick={() => openCreate('group')} icon={<FaPlus />} label="Add Group" />
+          </div>
+          {groups.length ? (
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+              {groups.map((group) => (
+                <CatalogCard
+                  key={group._id}
+                  title={group.name}
+                  subtitle={`${group.educationType || 'No type'} / ${subjectCountByGroup[group._id] || 0} subjects`}
+                  description={group.description}
+                  onEdit={() => openEdit('group', group)}
+                  onDelete={() => remove('group', group)}
+                />
+              ))}
+            </div>
+          ) : (
+            <p className="rounded-xl border border-white/10 bg-white/5 p-6 text-gray-400">No groups yet.</p>
+          )}
+        </div>
+      )}
+
+      {activeTab === 'subjects' && (
+        <div>
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2 text-white">
+              <FaBookOpen /><h2 className="text-xl font-semibold">Subjects</h2>
+              <span className="rounded-full bg-white/10 px-2 py-0.5 text-xs text-gray-300">{subjects.length}</span>
+            </div>
+            <ActionButton onClick={() => openCreate('subject')} icon={<FaPlus />} label="Add Subject" />
+          </div>
+          {subjects.length ? (
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+              {subjects.map((subject) => (
+                <CatalogCard
+                  key={subject._id}
+                  title={subject.name}
+                  subtitle={subject.group?.name || 'No group'}
+                  description={subject.description}
+                  color={subject.color}
+                  onEdit={() => openEdit('subject', subject)}
+                  onDelete={() => remove('subject', subject)}
+                />
+              ))}
+            </div>
+          ) : (
+            <p className="rounded-xl border border-white/10 bg-white/5 p-6 text-gray-400">No subjects yet.</p>
+          )}
+        </div>
+      )}
 
       {modal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={() => setModal(null)}>
@@ -153,17 +212,23 @@ const Courses = () => {
             <h2 className="mb-6 text-xl font-bold text-white">{modal.item ? 'Edit' : 'Add'} {modal.type}</h2>
             <form onSubmit={save} className="space-y-4">
               <Input label="Name" value={form.name} onChange={(value) => setForm({ ...form, name: value })} required />
-              {modal.type === 'course' && (
-                <Select label="Degree" value={form.degree} onChange={(value) => setForm({ ...form, degree: value })} required>
-                  <option value="">Select degree</option>
-                  {degrees.map((degree) => <option key={degree._id} value={degree._id}>{degree.name}</option>)}
+              {modal.type === 'group' && (
+                <Select label="Education Type" value={form.educationType} onChange={(value) => setForm({ ...form, educationType: value })} required>
+                  <option value="">Select education type</option>
+                  {educationTypes.map((et) => <option key={et} value={et}>{et}</option>)}
                 </Select>
               )}
               {modal.type === 'subject' && (
                 <>
-                  <Select label="Course" value={form.course} onChange={(value) => setForm({ ...form, course: value })} required>
-                    <option value="">Select course</option>
-                    {courses.map((course) => <option key={course._id} value={course._id}>{course.degree?.name} / {course.name}</option>)}
+                  <Select label="Education Type" value={form.educationType} onChange={(value) => {
+                    setForm({ ...form, educationType: value, group: '' });
+                  }} required>
+                    <option value="">Select education type</option>
+                    {educationTypes.map((et) => <option key={et} value={et}>{et}</option>)}
+                  </Select>
+                  <Select label="Group" value={form.group} onChange={(value) => setForm({ ...form, group: value })} required disabled={!form.educationType}>
+                    <option value="">Select group</option>
+                    {groups.filter((g) => g.educationType === form.educationType).map((g) => <option key={g._id} value={g._id}>{g.name}</option>)}
                   </Select>
                   <label className="block">
                     <span className="mb-2 block text-sm text-gray-300">Color</span>

@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { FaBell, FaCheck, FaExclamationTriangle, FaClock } from 'react-icons/fa';
+import { FaBell, FaCheck, FaExclamationTriangle, FaClock, FaVolumeUp, FaVolumeMute, FaPause } from 'react-icons/fa';
 import { useDispatch, useSelector } from 'react-redux';
 import useSocket from '../../hooks/useSocket';
 import { alarmApi } from '../../services/alarmApi';
@@ -26,6 +26,20 @@ const AlarmOverlay = () => {
   const currentAlarmRef = useRef(null);
   const isPlayingRef = useRef(false);
 
+  const [volume, setVolume] = useState(0.4);
+  const [isMuted, setIsMuted] = useState(false);
+
+  // Sync volume to active audio
+  useEffect(() => {
+    if (gainRef.current) {
+      gainRef.current.gain.value = isMuted ? 0 : volume;
+    }
+    if (audioRef.current) {
+      audioRef.current.muted = isMuted;
+      audioRef.current.volume = volume;
+    }
+  }, [volume, isMuted]);
+
   useEffect(() => {
     currentAlarmRef.current = currentAlarm;
   }, [currentAlarm]);
@@ -38,7 +52,7 @@ const AlarmOverlay = () => {
       audioContextRef.current = new (window.AudioContext || window.webkitAudioContext)();
       gainRef.current = audioContextRef.current.createGain();
       gainRef.current.connect(audioContextRef.current.destination);
-      gainRef.current.gain.value = 0.4;
+      gainRef.current.gain.value = isMuted ? 0 : volume;
 
       const playBeep = () => {
         if (!audioContextRef.current) return;
@@ -97,7 +111,8 @@ const AlarmOverlay = () => {
         const url = URL.createObjectURL(new Blob([wavBuffer], { type: 'audio/wav' }));
         audioRef.current = new Audio(url);
         audioRef.current.loop = true;
-        audioRef.current.volume = 0.4;
+        audioRef.current.volume = volume;
+        audioRef.current.muted = isMuted;
         audioRef.current.play().catch(() => {});
       } catch {}
     }
@@ -292,6 +307,16 @@ const AlarmOverlay = () => {
     }
   };
 
+  const handleSnooze = () => {
+    if (!currentAlarm) return;
+    const taskId = currentAlarm._id || currentAlarm.taskId;
+    if (socket) {
+      socket.emit('alarm:snooze', { taskId });
+    }
+    stopAlarmSound();
+    dispatch(removeAlarm(taskId));
+  };
+
   const getOverdueText = () => {
     if (!currentAlarm) return '';
     if (currentAlarm.overdue) return currentAlarm.overdue;
@@ -311,62 +336,99 @@ const AlarmOverlay = () => {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          className="fixed inset-0 z-[9999] bg-black/95 flex items-center justify-center p-4"
+          className="fixed inset-0 z-[9999] bg-black/95 flex items-center justify-center p-4 backdrop-blur-sm"
           style={{ cursor: 'default' }}
         >
           <motion.div
-            initial={{ scale: 0.8, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            exit={{ scale: 0.8, opacity: 0 }}
-            className="glass-card max-w-lg w-full p-8 text-center border-2 border-danger/50"
+            initial={{ scale: 0.8, opacity: 0, y: 20 }}
+            animate={{ scale: 1, opacity: 1, y: 0 }}
+            exit={{ scale: 0.8, opacity: 0, y: -20 }}
+            className="glass-card max-w-lg w-full p-8 text-center border-2 border-danger/50 shadow-[0_0_30px_rgba(239,68,68,0.3)] relative overflow-hidden"
           >
+            {/* Animated Glow Background */}
+            <motion.div 
+              className="absolute inset-0 bg-danger/10 z-[-1]"
+              animate={{ opacity: [0.3, 0.6, 0.3] }}
+              transition={{ repeat: Infinity, duration: 1.5 }}
+            />
+
             <motion.div
-              animate={{ scale: [1, 1.15, 1], rotate: [0, -5, 5, -5, 0] }}
+              animate={{ scale: [1, 1.2, 1], rotate: [0, -10, 10, -10, 0] }}
               transition={{ repeat: Infinity, duration: 1.2 }}
-              className="text-6xl mb-6 flex justify-center"
+              className="text-6xl mb-6 flex justify-center drop-shadow-[0_0_15px_rgba(239,68,68,0.8)]"
             >
               <FaExclamationTriangle className="text-danger" />
             </motion.div>
 
-            <h1 className="text-3xl font-bold text-danger mb-2">⚠️ TASK NOT COMPLETED</h1>
-            <div className="w-16 h-1 bg-danger mx-auto mb-6 rounded-full" />
+            <h1 className="text-3xl font-bold text-danger mb-2 tracking-wide uppercase drop-shadow-md">Task Not Completed</h1>
+            <div className="w-16 h-1 bg-danger mx-auto mb-6 rounded-full shadow-[0_0_10px_rgba(239,68,68,0.8)]" />
 
-            <div className="space-y-4 mb-8">
-              <div className="glass rounded-xl p-4">
-                <p className="text-gray-400 text-sm mb-1">Task</p>
-                <p className="text-white text-xl font-bold">{currentAlarm.title}</p>
+            <div className="space-y-4 mb-6 relative z-10">
+              <div className="glass rounded-xl p-4 bg-white/5 border border-white/10 backdrop-blur-md">
+                <p className="text-gray-400 text-xs uppercase tracking-wider mb-1">Task</p>
+                <p className="text-white text-2xl font-bold">{currentAlarm.title}</p>
               </div>
 
-              {currentAlarm.dueDate && (
-                <div className="glass rounded-xl p-4">
-                  <p className="text-gray-400 text-sm mb-1">Due</p>
-                  <p className="text-white text-lg">
-                    {new Date(currentAlarm.dueDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+              <div className="grid grid-cols-2 gap-4">
+                {currentAlarm.dueDate && (
+                  <div className="glass rounded-xl p-4 bg-white/5 border border-white/10 backdrop-blur-md">
+                    <p className="text-gray-400 text-xs uppercase tracking-wider mb-1">Scheduled</p>
+                    <p className="text-white text-lg font-semibold">
+                      {new Date(currentAlarm.dueDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    </p>
+                  </div>
+                )}
+                
+                <div className="glass rounded-xl p-4 bg-white/5 border border-white/10 backdrop-blur-md">
+                  <p className="text-gray-400 text-xs uppercase tracking-wider mb-1">Next Reminder</p>
+                  <p className="text-primary text-lg font-semibold flex items-center justify-center gap-2">
+                    <FaClock /> {currentAlarm.reminderInterval ? `${currentAlarm.reminderInterval}m` : '5m'}
                   </p>
                 </div>
-              )}
-
-              <div className="glass rounded-xl p-4 border border-danger/30">
-                <p className="text-gray-400 text-sm mb-1">Overdue</p>
-                <p className="text-danger text-lg font-bold flex items-center justify-center gap-2">
-                  <FaClock /> {getOverdueText()}
-                </p>
               </div>
             </div>
 
-            <p className="text-gray-400 mb-8">
-              Please complete this task immediately. The alarm will continue until completed.
-            </p>
+            {/* Audio Controls */}
+            <div className="flex items-center justify-center gap-4 mb-8 bg-black/40 p-3 rounded-xl border border-white/5">
+              <button 
+                onClick={() => setIsMuted(!isMuted)} 
+                className={`p-2 rounded-lg transition-colors ${isMuted ? 'text-danger bg-danger/10' : 'text-gray-300 hover:text-white hover:bg-white/10'}`}
+                title={isMuted ? "Unmute Alarm" : "Mute Alarm"}
+              >
+                {isMuted ? <FaVolumeMute size={20} /> : <FaVolumeUp size={20} />}
+              </button>
+              <input 
+                type="range" 
+                min="0" 
+                max="1" 
+                step="0.05" 
+                value={volume}
+                onChange={(e) => {
+                  setVolume(parseFloat(e.target.value));
+                  if (isMuted && parseFloat(e.target.value) > 0) setIsMuted(false);
+                }}
+                className="w-32 h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-primary"
+              />
+            </div>
 
-            <button
-              onClick={handleComplete}
-              className="w-full flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-success hover:bg-green-600 text-white font-semibold transition-all text-lg"
-            >
-              <FaCheck /> Complete Task
-            </button>
+            <div className="grid grid-cols-2 gap-4">
+              <button
+                onClick={handleComplete}
+                className="flex items-center justify-center gap-2 px-6 py-4 rounded-xl bg-success hover:bg-green-600 text-white font-bold transition-all text-lg shadow-[0_0_15px_rgba(34,197,94,0.4)]"
+              >
+                <FaCheck /> Mark Complete
+              </button>
+              
+              <button
+                onClick={handleSnooze}
+                className="flex items-center justify-center gap-2 px-6 py-4 rounded-xl bg-white/10 hover:bg-white/20 text-white font-semibold transition-all text-lg border border-white/20"
+              >
+                <FaPause /> Snooze
+              </button>
+            </div>
 
-            <p className="text-gray-600 text-xs mt-4">
-              Alarm cannot be dismissed. You must complete the task to stop it.
+            <p className="text-gray-400 text-xs mt-6 opacity-75">
+              The alarm will continue repeating until the task is marked as completed.
             </p>
           </motion.div>
         </motion.div>

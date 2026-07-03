@@ -1,12 +1,20 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import { authApi } from '../../services/authApi';
 
+function extractMessage(error) {
+  if (error.response?.data?.message) return error.response.data;
+  if (error.response?.data) return error.response.data;
+  if (error.code === 'ECONNABORTED') return { message: 'Request timed out. Server may be down or unreachable.' };
+  if (error.code === 'ERR_NETWORK') return { message: 'Network error. Unable to reach the server.' };
+  return { message: error.message || 'An unexpected error occurred.' };
+}
+
 export const login = createAsyncThunk('auth/login', async (credentials, { rejectWithValue }) => {
   try {
     const data = await authApi.login(credentials);
     return data;
   } catch (error) {
-    return rejectWithValue(error.response?.data || { message: 'Login failed' });
+    return rejectWithValue(extractMessage(error));
   }
 });
 
@@ -15,7 +23,7 @@ export const signup = createAsyncThunk('auth/signup', async (userData, { rejectW
     const data = await authApi.signup(userData);
     return data;
   } catch (error) {
-    return rejectWithValue(error.response?.data || { message: 'Signup failed' });
+    return rejectWithValue(extractMessage(error));
   }
 });
 
@@ -24,7 +32,8 @@ export const fetchProfile = createAsyncThunk('auth/fetchProfile', async (_, { re
     const data = await authApi.getProfile();
     return data;
   } catch (error) {
-    return rejectWithValue(error.response?.data?.message || 'Failed to fetch profile');
+    const errData = extractMessage(error);
+    return rejectWithValue(typeof errData === 'string' ? { message: errData } : errData);
   }
 });
 
@@ -33,7 +42,7 @@ export const acceptAgreement = createAsyncThunk('auth/acceptAgreement', async (_
     const data = await authApi.acceptAgreement();
     return data;
   } catch (error) {
-    return rejectWithValue(error.response?.data || { message: 'Failed to accept agreement' });
+    return rejectWithValue(extractMessage(error));
   }
 });
 
@@ -42,7 +51,7 @@ export const googleLogin = createAsyncThunk('auth/googleLogin', async (credentia
     const data = await authApi.googleLogin(credential);
     return data;
   } catch (error) {
-    return rejectWithValue(error.response?.data || { message: 'Google login failed' });
+    return rejectWithValue(extractMessage(error));
   }
 });
 

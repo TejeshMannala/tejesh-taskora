@@ -1,4 +1,7 @@
+import mongoose from 'mongoose';
 import User from '../models/user.model.js';
+
+const isValidObjectId = (id) => mongoose.Types.ObjectId.isValid(id);
 
 export const getUsers = async (req, res) => {
   try {
@@ -28,16 +31,19 @@ export const getUsers = async (req, res) => {
 
 export const getUserById = async (req, res) => {
   try {
+    if (!isValidObjectId(req.params.id)) return res.status(400).json({ success: false, message: 'Invalid user ID' });
     const user = await User.findById(req.params.id).select('-password');
     if (!user) return res.status(404).json({ success: false, message: 'User not found' });
     res.json({ success: true, user });
   } catch (error) {
+    console.error('[admin getUserById]', error);
     res.status(500).json({ success: false, message: error.message });
   }
 };
 
 export const updateUser = async (req, res) => {
   try {
+    if (!isValidObjectId(req.params.id)) return res.status(400).json({ success: false, message: 'Invalid user ID' });
     const { name, email, role, college, branch, semester, course, group } = req.body;
     const user = await User.findByIdAndUpdate(
       req.params.id,
@@ -47,16 +53,19 @@ export const updateUser = async (req, res) => {
     if (!user) return res.status(404).json({ success: false, message: 'User not found' });
     res.json({ success: true, user });
   } catch (error) {
+    console.error('[admin updateUser]', error);
     res.status(500).json({ success: false, message: error.message });
   }
 };
 
 export const deleteUser = async (req, res) => {
   try {
+    if (!isValidObjectId(req.params.id)) return res.status(400).json({ success: false, message: 'Invalid user ID' });
     const user = await User.findByIdAndDelete(req.params.id);
     if (!user) return res.status(404).json({ success: false, message: 'User not found' });
     res.json({ success: true, message: 'User deleted' });
   } catch (error) {
+    console.error('[admin deleteUser]', error);
     res.status(500).json({ success: false, message: error.message });
   }
 };

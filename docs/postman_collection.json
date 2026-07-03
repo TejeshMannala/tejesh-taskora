@@ -8,7 +8,10 @@
     { "key": "token", "value": "" },
     { "key": "groupId", "value": "" },
     { "key": "subjectId", "value": "" },
-    { "key": "taskId", "value": "" }
+    { "key": "taskId", "value": "" },
+    { "key": "email", "value": "student@example.com" },
+    { "key": "otp", "value": "" },
+    { "key": "educationType", "value": "" }
   ],
   "auth": {
     "type": "bearer",
@@ -18,7 +21,7 @@
   },
   "item": [
     {
-      "name": "Auth",
+      "name": "AUTH",
       "item": [
         {
           "name": "Signup",
@@ -28,7 +31,7 @@
             "url": "{{baseUrl}}/auth/signup",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"name\": \"Student User\",\n  \"email\": \"student@example.com\",\n  \"password\": \"Password123!\",\n  \"college\": \"Demo College\",\n  \"educationType\": \"B.Tech\",\n  \"group\": \"{{groupId}}\",\n  \"academicYear\": \"1st Year\"\n}"
+              "raw": "{\n  \"name\": \"Student User\",\n  \"email\": \"{{email}}\",\n  \"password\": \"Password123!\",\n  \"college\": \"Demo College\",\n  \"educationType\": \"B.Tech\",\n  \"group\": \"{{groupId}}\",\n  \"academicYear\": \"1st Year\"\n}"
             }
           }
         },
@@ -40,7 +43,7 @@
             "url": "{{baseUrl}}/auth/login",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"email\": \"student@example.com\",\n  \"password\": \"Password123!\"\n}"
+              "raw": "{\n  \"email\": \"{{email}}\",\n  \"password\": \"Password123!\"\n}"
             }
           }
         },
@@ -63,34 +66,117 @@
       ]
     },
     {
-      "name": "Profile and Academic",
+      "name": "OTP / FORGOT PASSWORD",
       "item": [
         {
-          "name": "Get Groups",
-          "request": { "method": "GET", "url": "{{baseUrl}}/academic/groups?educationType=B.Tech" }
-        },
-        {
-          "name": "Get Profile",
-          "request": { "method": "GET", "url": "{{baseUrl}}/users/profile" }
-        },
-        {
-          "name": "Update Profile",
+          "name": "Send OTP",
           "request": {
-            "method": "PUT",
+            "method": "POST",
             "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "url": "{{baseUrl}}/users/profile",
+            "url": "{{baseUrl}}/otp/send-otp",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"name\": \"Student User\",\n  \"college\": \"Demo College\",\n  \"educationType\": \"B.Tech\",\n  \"group\": \"{{groupId}}\",\n  \"semesterYear\": \"Semester 1\",\n  \"academicYear\": \"2026-2027\",\n  \"profilePicture\": \"\"\n}"
+              "raw": "{\n  \"email\": \"{{email}}\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var jsonData = pm.response.json();",
+                  "if (jsonData.success && jsonData.otp) {",
+                  "  pm.collectionVariables.set('otp', jsonData.otp);",
+                  "  console.log('OTP for testing:', jsonData.otp);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Verify OTP",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/otp/verify",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{email}}\",\n  \"otp\": \"{{otp}}\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Reset Password",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/otp/reset-password",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{email}}\",\n  \"otp\": \"{{otp}}\",\n  \"newPassword\": \"NewPassword123!\"\n}"
             }
           }
         }
       ]
     },
     {
-      "name": "Subjects",
+      "name": "PROFILE & ACADEMIC",
       "item": [
-        { "name": "List Subjects", "request": { "method": "GET", "url": "{{baseUrl}}/subjects" } },
+        {
+          "name": "Get Education Types",
+          "request": { "method": "GET", "url": "{{baseUrl}}/education/types" }
+        },
+        {
+          "name": "Get Groups by Education Type",
+          "request": { "method": "GET", "url": "{{baseUrl}}/education/groups?educationType=B.Tech" }
+        },
+        {
+          "name": "Get Subjects by Group",
+          "request": { "method": "GET", "url": "{{baseUrl}}/education/subjects?group={{groupId}}" }
+        },
+        {
+          "name": "Get Academic Groups",
+          "request": { "method": "GET", "url": "{{baseUrl}}/academic/groups?educationType=B.Tech" }
+        },
+        {
+          "name": "Get Academic Subjects",
+          "request": { "method": "GET", "url": "{{baseUrl}}/academic/subjects?group={{groupId}}" }
+        },
+        {
+          "name": "Get Profile",
+          "request": { "method": "GET", "url": "{{baseUrl}}/users/profile" }
+        },
+        {
+          "name": "Update Profile (First time — locks academic fields)",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/users/profile",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Student User\",\n  \"college\": \"Demo College\",\n  \"educationType\": \"B.Tech\",\n  \"group\": \"{{groupId}}\",\n  \"semesterYear\": \"Semester 1\",\n  \"academicYear\": \"2026-2027\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Update Profile (After lock — name only)",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/users/profile",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Updated Student Name\"\n}"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "SUBJECTS",
+      "item": [
+        { "name": "List My Subjects", "request": { "method": "GET", "url": "{{baseUrl}}/subjects" } },
         {
           "name": "Create Subject",
           "request": {
@@ -113,7 +199,7 @@
       ]
     },
     {
-      "name": "Tasks and Reminders",
+      "name": "TASKS",
       "item": [
         { "name": "List Tasks", "request": { "method": "GET", "url": "{{baseUrl}}/tasks" } },
         {
@@ -130,6 +216,81 @@
         },
         { "name": "Toggle Task Complete", "request": { "method": "PATCH", "url": "{{baseUrl}}/tasks/{{taskId}}/toggle" } },
         { "name": "Delete Task", "request": { "method": "DELETE", "url": "{{baseUrl}}/tasks/{{taskId}}" } }
+      ]
+    },
+    {
+      "name": "ADMIN — SEED",
+      "item": [
+        {
+          "name": "Seed Academic Data",
+          "request": { "method": "POST", "url": "{{baseUrl}}/admin/academic/seed" }
+        }
+      ]
+    },
+    {
+      "name": "ADMIN — GROUPS",
+      "item": [
+        {
+          "name": "List Groups",
+          "request": { "method": "GET", "url": "{{baseUrl}}/admin/groups" }
+        },
+        {
+          "name": "List Groups by Education Type",
+          "request": { "method": "GET", "url": "{{baseUrl}}/admin/groups?educationType=B.Tech" }
+        },
+        {
+          "name": "Create Group",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/admin/groups",
+            "body": { "mode": "raw", "raw": "{\n  \"name\": \"CSE-AI\",\n  \"educationType\": \"B.Tech\",\n  \"description\": \"Computer Science with AI specialization\"\n}" }
+          }
+        },
+        {
+          "name": "Update Group",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/admin/groups/{{groupId}}",
+            "body": { "mode": "raw", "raw": "{\n  \"description\": \"Updated description\"\n}" }
+          }
+        },
+        {
+          "name": "Delete Group",
+          "request": { "method": "DELETE", "url": "{{baseUrl}}/admin/groups/{{groupId}}" }
+        }
+      ]
+    },
+    {
+      "name": "ADMIN — SUBJECTS (Shared)",
+      "item": [
+        {
+          "name": "List Shared Subjects",
+          "request": { "method": "GET", "url": "{{baseUrl}}/admin/subjects" }
+        },
+        {
+          "name": "Create Shared Subject",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/admin/subjects",
+            "body": { "mode": "raw", "raw": "{\n  \"name\": \"Machine Learning\",\n  \"group\": \"{{groupId}}\",\n  \"description\": \"ML for CSE-AI\",\n  \"color\": \"#10b981\"\n}" }
+          }
+        },
+        {
+          "name": "Update Shared Subject",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/admin/subjects/{{subjectId}}",
+            "body": { "mode": "raw", "raw": "{\n  \"description\": \"Updated description\"\n}" }
+          }
+        },
+        {
+          "name": "Delete Shared Subject",
+          "request": { "method": "DELETE", "url": "{{baseUrl}}/admin/subjects/{{subjectId}}" }
+        }
       ]
     }
   ]

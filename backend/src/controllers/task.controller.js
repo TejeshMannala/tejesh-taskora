@@ -1,4 +1,7 @@
+import mongoose from 'mongoose';
 import Task from '../models/task.model.js';
+
+const isValidObjectId = (id) => mongoose.Types.ObjectId.isValid(id);
 
 export const getTasks = async (req, res) => {
   try {
@@ -29,39 +32,43 @@ export const getTasks = async (req, res) => {
 
     res.json({ success: true, tasks, total, page: parseInt(page), pages: Math.ceil(total / limit) });
   } catch (error) {
-    console.error(error);
+    console.error('[getTasks]', error);
     res.status(500).json({ success: false, message: error.message });
   }
 };
 
 export const getTask = async (req, res) => {
   try {
+    if (!isValidObjectId(req.params.id)) return res.status(400).json({ success: false, message: 'Invalid task ID' });
     const task = await Task.findOne({ _id: req.params.id, user: req.user._id });
     if (!task) return res.status(404).json({ success: false, message: 'Task not found' });
     res.json({ success: true, task });
   } catch (error) {
-    console.error(error);
+    console.error('[getTask]', error);
     res.status(500).json({ success: false, message: error.message });
   }
 };
 
 export const createTask = async (req, res) => {
   try {
-    const { title, subject, category, durationMinutes, priority, date, dueDate, reminders, reminderEnabled, notes } = req.body;
+    const { title, subject, category, durationMinutes, priority, date, dueDate, dueTime, reminderInterval, reminders, reminderEnabled, notes } = req.body;
+    if (!title?.trim()) return res.status(400).json({ success: false, message: 'Task title is required' });
     const task = await Task.create({
-      user: req.user._id, title, subject, category, durationMinutes, priority, date, dueDate,
+      user: req.user._id, title: title.trim(), subject, category, durationMinutes, priority, date, dueDate, dueTime, reminderInterval,
+      nextReminderAt: dueDate,
       reminders, reminderEnabled, notes,
       completed: false,
     });
     res.status(201).json({ success: true, task });
   } catch (error) {
-    console.error(error);
+    console.error('[createTask]', error);
     res.status(500).json({ success: false, message: error.message });
   }
 };
 
 export const updateTask = async (req, res) => {
   try {
+    if (!isValidObjectId(req.params.id)) return res.status(400).json({ success: false, message: 'Invalid task ID' });
     let task = await Task.findOne({ _id: req.params.id, user: req.user._id });
     if (!task) return res.status(404).json({ success: false, message: 'Task not found' });
 
@@ -72,29 +79,37 @@ export const updateTask = async (req, res) => {
       updateData.alarmTriggered = false;
       updateData.alarmActive = false;
       updateData.status = 'Completed';
+      updateData.nextReminderAt = null;
+      updateData.lastReminderAt = null;
+    }
+
+    if (updateData.dueDate && !updateData.nextReminderAt && completed !== true) {
+      updateData.nextReminderAt = updateData.dueDate;
     }
 
     task = await Task.findByIdAndUpdate(req.params.id, updateData, { returnDocument: 'after', runValidators: true });
     res.json({ success: true, task });
   } catch (error) {
-    console.error(error);
+    console.error('[updateTask]', error);
     res.status(500).json({ success: false, message: error.message });
   }
 };
 
 export const deleteTask = async (req, res) => {
   try {
+    if (!isValidObjectId(req.params.id)) return res.status(400).json({ success: false, message: 'Invalid task ID' });
     const task = await Task.findOneAndDelete({ _id: req.params.id, user: req.user._id });
     if (!task) return res.status(404).json({ success: false, message: 'Task not found' });
     res.json({ success: true, message: 'Task deleted' });
   } catch (error) {
-    console.error(error);
+    console.error('[deleteTask]', error);
     res.status(500).json({ success: false, message: error.message });
   }
 };
 
 export const toggleTask = async (req, res) => {
   try {
+    if (!isValidObjectId(req.params.id)) return res.status(400).json({ success: false, message: 'Invalid task ID' });
     const task = await Task.findOne({ _id: req.params.id, user: req.user._id });
     if (!task) return res.status(404).json({ success: false, message: 'Task not found' });
 
@@ -105,12 +120,16 @@ export const toggleTask = async (req, res) => {
     if (!wasCompleted) {
       task.alarmTriggered = false;
       task.alarmActive = false;
+      task.nextReminderAt = null;
+      task.lastReminderAt = null;
+    } else {
+      task.nextReminderAt = task.dueDate;
     }
     await task.save();
 
     res.json({ success: true, task });
   } catch (error) {
-    console.error(error);
+    console.error('[toggleTask]', error);
     res.status(500).json({ success: false, message: error.message });
   }
 };

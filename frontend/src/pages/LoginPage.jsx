@@ -150,14 +150,22 @@ const LoginPage = () => {
   const handleGoogleSuccess = async (credentialResponse) => {
     setIsGoogleLoading(true);
     try {
-      const result = await dispatch(googleLogin(credentialResponse.credential)).unwrap();
+      // credentialResponse can come from:
+      //   <GoogleLogin>  component  -> { credential: 'ID_TOKEN_JWT' }
+      //   useGoogleLogin() hook     -> { credential: 'ACCESS_TOKEN' }
+      // Both are forwarded as-is to the backend which handles each type.
+      const credential = credentialResponse?.credential || credentialResponse?.access_token;
+      if (!credential) {
+        throw new Error('No credential received from Google.');
+      }
+      const result = await dispatch(googleLogin(credential)).unwrap();
       if (result.success) {
         setIsSuccess(true);
         setUserName(result?.user?.name || 'there');
         setTimeout(() => navigate('/profile'), 2000);
       }
     } catch (error) {
-      const msg = error?.message || 'Google login failed';
+      const msg = error?.message || error?.data?.message || 'Google login failed';
       if (msg.includes('not configured') || msg.includes('GOOGLE_CLIENT_ID')) {
         setErrorModal({
           isOpen: true,
@@ -362,7 +370,7 @@ const LoginPage = () => {
                       <input type="checkbox" className="rounded bg-white/5 border-white/10 text-primary focus:ring-primary" />
                       Remember me
                     </label>
-                    <Link to="/forgotten-password" onClick={() => console.log("Forgot clicked")} className="text-primary hover:text-accent transition-colors">Forgot password?</Link>
+                    <Link to="/forgotten-password" className="text-primary hover:text-accent transition-colors">Forgot password?</Link>
                   </div>
 
                   <motion.button

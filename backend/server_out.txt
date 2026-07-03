@@ -1,5 +1,0 @@
-◇ injected env (5) from .env // tip: ⌘ suppress logs { quiet: true }
-MongoDB Connected
-Redis connection unavailable: ECONNREFUSED
-Reminder cron jobs started
-Server running on port 5000

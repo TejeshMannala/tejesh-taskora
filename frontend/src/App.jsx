@@ -1,7 +1,10 @@
+import { useEffect } from 'react';
 import { Navigate, Routes, Route } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
-import { useSelector } from 'react-redux';
+import { useDispatch, useSelector } from 'react-redux';
 import ErrorBoundary from './components/ui/ErrorBoundary';
+import BackendStatusBanner from './components/ui/BackendStatusBanner';
+import { fetchProfile } from './redux/slices/authSlice';
 import LandingPage from './pages/LandingPage';
 import LoginPage from './pages/LoginPage';
 import SignupPage from './pages/SignupPage';
@@ -23,8 +26,15 @@ import Subjects from './pages/Subjects/index';
 import './index.css';
 
 function App() {
+  const dispatch = useDispatch();
   const { user, isAuthenticated } = useSelector((state) => state.auth);
   const needsAgreement = isAuthenticated && user && (user.isFirstLogin || !user.hasAcceptedAgreement);
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      dispatch(fetchProfile());
+    }
+  }, [dispatch, isAuthenticated]);
 
   const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID?.trim();
   if (!googleClientId || googleClientId === 'your_google_client_id_here') {
@@ -45,6 +55,7 @@ function App() {
         success: { iconTheme: { primary: '#22c55e', secondary: '#fff' } },
         error: { iconTheme: { primary: '#ef4444', secondary: '#fff' } },
       }} />
+      <BackendStatusBanner />
       <AlarmOverlay />
       {needsAgreement && <AgreementPopup />}
       <Routes>
@@ -62,6 +73,7 @@ function App() {
             <Route path="/profile" element={<ErrorBoundary><Profile /></ErrorBoundary>} />
             <Route path="/settings" element={<ErrorBoundary><Settings /></ErrorBoundary>} />
             <Route path="/subjects" element={<ErrorBoundary><Subjects /></ErrorBoundary>} />
+            <Route path="/calendar" element={<Navigate to="/tasks" replace />} />
           </Route>
         </Route>
       </Routes>

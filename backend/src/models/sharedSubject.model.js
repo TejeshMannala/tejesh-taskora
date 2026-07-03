@@ -12,6 +12,10 @@ const subjectSchema = new mongoose.Schema(
       ref: 'Group',
       required: true,
     },
+    semester: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Semester',
+    },
     description: {
       type: String,
       trim: true,

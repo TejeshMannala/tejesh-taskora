@@ -1,10 +1,11 @@
+import mongoose from 'mongoose';
 import User from '../models/user.model.js';
-import Achievement from '../models/achievement.model.js';
+import Group from '../models/group.model.js';
 import Subject from '../models/subject.model.js';
 import SharedSubject from '../models/sharedSubject.model.js';
 import bcrypt from 'bcryptjs';
 import generateToken from '../utils/generateToken.js';
-import { ensureAcademicDefaults } from './seed.controller.js';
+import { generateUserSemesters } from './semester.controller.js';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -15,7 +16,6 @@ const __dirname = path.dirname(__filename);
 export const generateSubjectsForUser = async (userId, groupId) => {
   if (!groupId) return [];
 
-  await ensureAcademicDefaults();
   const sharedSubjects = await SharedSubject.find({ group: groupId, isActive: { $ne: false } });
   const created = [];
 
@@ -50,11 +50,9 @@ export const getProfile = async (req, res) => {
         avatar: user.avatar,
         profilePicture: user.profilePicture,
         college: user.college,
+        university: user.university,
         educationType: user.educationType,
-        year: user.year,
-        semesterYear: user.semesterYear,
         group: user.group,
-        academicYear: user.academicYear,
         profileLocked: user.profileLocked,
         studyStreak: user.studyStreak,
         longestStreak: user.longestStreak,
@@ -71,19 +69,33 @@ export const getProfile = async (req, res) => {
   }
 };
 
+const resolveGroup = async (groupId, educationType) => {
+  if (!groupId || groupId === '') return undefined;
+  if (mongoose.Types.ObjectId.isValid(groupId)) return groupId;
+  const group = await Group.findOne({ name: groupId, educationType });
+  if (group) return group._id;
+  const fallbackMatch = typeof groupId === 'string' && groupId.startsWith('fb:')
+    ? groupId.split(':').pop()
+    : null;
+  if (fallbackMatch) {
+    const found = await Group.findOne({ name: fallbackMatch, educationType });
+    if (found) return found._id;
+  }
+  return undefined;
+};
+
 export const updateProfile = async (req, res) => {
   try {
-    console.log('[UpdateProfile] req.body:', req.body);
-    console.log('[UpdateProfile] req.file:', req.file);
-    const { name, avatar, profilePicture, college, educationType, year, semesterYear, academicYear, studyGoals, group } = req.body;
+    let { name, avatar, profilePicture, college, university, educationType, studyGoals, group } = req.body;
     const user = await User.findById(req.user._id);
 
     if (!user) return res.status(404).json({ success: false, message: 'User not found' });
 
+    group = await resolveGroup(group, educationType);
+
     // If profile is locked, prevent editing academic fields
     if (user.profileLocked) {
-      // Allow only name and profilePicture changes
-      if (college || educationType || group || academicYear || semesterYear) {
+      if (college || university || educationType || group) {
         return res.status(403).json({ success: false, message: 'Academic profile is locked. These fields can only be changed once.' });
       }
       if (name?.trim()) user.name = name.trim();
@@ -112,7 +124,6 @@ export const updateProfile = async (req, res) => {
     if (!college?.trim()) return res.status(400).json({ success: false, message: 'College name is required' });
     if (!educationType) return res.status(400).json({ success: false, message: 'Education type is required' });
     if (!group) return res.status(400).json({ success: false, message: 'Group or branch is required' });
-    if (!academicYear?.trim()) return res.status(400).json({ success: false, message: 'Academic year is required' });
 
     // Lock profile after first save
     user.profileLocked = true;
@@ -124,13 +135,8 @@ export const updateProfile = async (req, res) => {
       user.avatar = profilePicture || user.avatar;
     }
     user.college = college.trim();
+    if (university?.trim()) user.university = university.trim();
     user.educationType = educationType;
-    if (year) user.year = year;
-    if (semesterYear) {
-      user.semesterYear = semesterYear;
-      user.year = semesterYear;
-    }
-    user.academicYear = academicYear.trim();
     if (studyGoals) user.studyGoals = studyGoals;
     user.group = group;
 
@@ -139,6 +145,12 @@ export const updateProfile = async (req, res) => {
     let subjects = [];
     if (user.group) {
       subjects = await generateSubjectsForUser(user._id, user.group);
+    }
+
+    try {
+      await generateUserSemesters(user._id);
+    } catch (semError) {
+      console.warn('Semester initialization:', semError.message);
     }
 
     const populatedUser = await User.findById(user._id).populate('group', 'name');
@@ -153,10 +165,9 @@ export const updateProfile = async (req, res) => {
         avatar: populatedUser.avatar,
         profilePicture: populatedUser.profilePicture,
         college: populatedUser.college,
+        university: populatedUser.university,
         educationType: populatedUser.educationType,
         group: populatedUser.group,
-        academicYear: populatedUser.academicYear,
-        semesterYear: populatedUser.semesterYear,
         profileLocked: populatedUser.profileLocked,
       },
       subjects,
@@ -169,8 +180,11 @@ export const updateProfile = async (req, res) => {
 
 export const uploadProfileImage = async (req, res) => {
   try {
-    console.log('[UploadProfileImage] req.file:', req.file?.originalname, req.file?.size);
-    console.log('[UploadProfileImage] req.body:', req.body);
+    const uploadsDir = path.join(__dirname, '..', '..', 'uploads');
+    if (!fs.existsSync(uploadsDir)) {
+      fs.mkdirSync(uploadsDir, { recursive: true });
+    }
+
     if (!req.file) {
       return res.status(400).json({ success: false, message: 'No image file provided' });
     }

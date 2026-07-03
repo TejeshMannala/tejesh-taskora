@@ -12,6 +12,32 @@ dotenv.config();
 const PORT = parseInt(process.env.PORT, 10) || 5000;
 const MONGO_URI = process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/taskora';
 
+// ── Startup validation ──────────────────────────────────────────────────
+const validateEnv = () => {
+  const warnings = [];
+  if (!process.env.JWT_SECRET || process.env.JWT_SECRET === 'fallback_secret') {
+    warnings.push('JWT_SECRET is missing or using fallback — set a strong secret in .env');
+  }
+  if (!process.env.MONGO_URI) {
+    warnings.push('MONGO_URI is not set — using default localhost');
+  }
+  const mailUser = process.env.MAIL_USER || process.env.SMTP_USER;
+  const mailPass = process.env.MAIL_PASS || process.env.SMTP_PASS;
+  if (!mailUser || !mailPass) {
+    warnings.push('SMTP/MAIL credentials missing — email sending will fail');
+  }
+  const googleId = process.env.GOOGLE_CLIENT_ID?.trim();
+  if (!googleId || googleId.includes('your_') || googleId.length < 20) {
+    warnings.push('GOOGLE_CLIENT_ID is missing or invalid — Google SSO unavailable');
+  }
+  if (warnings.length > 0) {
+    console.warn('── Startup Warnings ──────────────────────────────');
+    warnings.forEach((w) => console.warn(`  ⚠  ${w}`));
+    console.warn('──────────────────────────────────────────────────');
+  }
+  return warnings;
+};
+
 // ── Global error handlers ──────────────────────────────────────────────
 process.on('uncaughtException', (err) => {
   console.error('UNCAUGHT EXCEPTION:', err);
@@ -38,7 +64,7 @@ mongoose.connection.on('reconnect', () => {
   console.log('Mongoose reconnected');
 });
 
-// ── Server setup ───────────────────────────────────────────────────────
+// ── Server setup (start IMMEDIATELY, before MongoDB) ──────────────────
 const server = http.createServer(app);
 
 const io = initializeSocket(server);
@@ -52,10 +78,13 @@ const startServer = (port) => {
         server.close(() => startServer(nextPort));
       } else {
         console.error('Server error:', err);
+        process.exit(1);
       }
     })
     .on('listening', () => {
-      console.log(`Server running on port ${port}`);
+      const actualPort = server.address().port;
+      console.log(`Server running on port ${actualPort}`);
+      console.log(`FRONTEND_URL = ${process.env.FRONTEND_URL || 'http://localhost:5173'}`);
     });
 };
 
@@ -74,20 +103,30 @@ const gracefulShutdown = async (signal) => {
 process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
 process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 
-// ── Connect to MongoDB ─────────────────────────────────────────────────
-mongoose
-  .connect(MONGO_URI, {
-    serverSelectionTimeoutMS: 10000,
-    socketTimeoutMS: 45000,
-    heartbeatFrequencyMS: 10000,
-    retryWrites: true,
-    w: 'majority',
-  })
-  .then(async () => {
-    console.log('MongoDB Connected');
-    await initRedis();
+// ── Start HTTP server FIRST ──────────────────────────────────────────
+validateEnv();
+startServer(PORT);
 
-    // Import User model (must happen AFTER connection for index sync to work)
+// ── THEN initialize MongoDB and other services in background ─────────
+async function initializeServices() {
+  try {
+    await mongoose.connect(MONGO_URI, {
+      serverSelectionTimeoutMS: 10000,
+      socketTimeoutMS: 45000,
+      heartbeatFrequencyMS: 10000,
+      retryWrites: true,
+      w: 'majority',
+    });
+    console.log('MongoDB Connected');
+
+    // Redis (best-effort)
+    try {
+      await initRedis();
+    } catch (err) {
+      console.log('Redis unavailable (non-fatal):', err.code || err.message);
+    }
+
+    // Import User model (must happen AFTER connection for index sync)
     let User;
     try {
       const mod = await import('./models/user.model.js');
@@ -103,10 +142,8 @@ mongoose
       } catch (err) {
         console.error('Failed to sync User indexes:', err.message);
       }
-    }
 
-    // Auto-seed default admin
-    if (User) {
+      // Auto-seed default admin
       try {
         const adminEmail = process.env.ADMIN_EMAIL;
         const adminPassword = process.env.ADMIN_PASSWORD;
@@ -133,17 +170,33 @@ mongoose
       }
     }
 
+    // Start cron jobs
     startReminderCron();
 
-    // Verify SMTP connection proactively
+    // Seed academic data
+    try {
+      const { ensureAcademicDefaults } = await import('./controllers/seed.controller.js');
+      const seeded = await ensureAcademicDefaults();
+      console.log(`[Seed] ${seeded.educations} education types, ${seeded.groups} groups, ${seeded.subjects} subjects, ${seeded.semesters} semesters`);
+    } catch (err) {
+      console.error('[Seed] Failed to seed academic data:', err.message);
+    }
+
+    // Verify SMTP
     const smtpOk = await verifyTransporter();
     if (!smtpOk) {
       console.warn('[SMTP] Email sending will fail — check .env MAIL_USER / MAIL_PASS');
     }
 
-    startServer(PORT);
-  })
-  .catch((err) => {
-    console.error('MongoDB connection error:', err);
-    process.exit(1);
-  });
+    console.log('All services initialized — server fully operational');
+  } catch (err) {
+    console.error('MongoDB connection error:', err.message);
+    console.log('───────────────────────────────────────────────────────────');
+    console.log('  Server running in DEGRADED mode — database unavailable.');
+    console.log('  Health check:  GET /api/health');
+    console.log('  CORS origin:   ' + (process.env.FRONTEND_URL || 'http://localhost:5173'));
+    console.log('───────────────────────────────────────────────────────────');
+  }
+}
+
+initializeServices();

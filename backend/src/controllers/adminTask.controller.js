@@ -1,4 +1,7 @@
+import mongoose from 'mongoose';
 import Task from '../models/task.model.js';
+
+const isValidObjectId = (id) => mongoose.Types.ObjectId.isValid(id);
 
 export const getAllTasks = async (req, res) => {
   try {
@@ -30,10 +33,12 @@ export const getAllTasks = async (req, res) => {
 
 export const deleteTask = async (req, res) => {
   try {
+    if (!isValidObjectId(req.params.id)) return res.status(400).json({ success: false, message: 'Invalid task ID' });
     const task = await Task.findByIdAndDelete(req.params.id);
     if (!task) return res.status(404).json({ success: false, message: 'Task not found' });
     res.json({ success: true, message: 'Task deleted' });
   } catch (error) {
+    console.error('[admin deleteTask]', error);
     res.status(500).json({ success: false, message: error.message });
   }
 };

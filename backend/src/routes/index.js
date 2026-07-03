@@ -18,6 +18,7 @@ import alarmRoutes from './alarm.routes.js';
 import academicRoutes from './academic.routes.js';
 import otpRoutes from './otp.routes.js';
 import educationRoutes from './education.routes.js';
+import semesterRoutes from './semester.routes.js';
 
 const router = express.Router();
 
@@ -40,5 +41,6 @@ router.use('/alarms', alarmRoutes);
 router.use('/academic', academicRoutes);
 router.use('/otp', otpRoutes);
 router.use('/education', educationRoutes);
+router.use('/semesters', semesterRoutes);
 
 export default router;
