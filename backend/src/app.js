@@ -5,6 +5,7 @@ import helmet from 'helmet';
 import morgan from 'morgan';
 import mongoose from 'mongoose';
 import path from 'path';
+import fs from 'fs';
 import { fileURLToPath } from 'url';
 
 dotenv.config();
@@ -172,14 +173,25 @@ app.use(/\/api\/v1\/.*/, (req, res) => {
   res.status(404).json({ success: false, message: `Route not found: ${req.method} ${req.originalUrl}` });
 });
 
-// Serve frontend build in production (SPA fallback for page refresh support)
-if (process.env.NODE_ENV === 'production') {
-  const frontendDist = path.join(__dirname, '..', '..', 'frontend', 'dist');
+// Serve frontend build (SPA fallback for page refresh support)
+const frontendDist = path.join(__dirname, '..', '..', 'frontend', 'dist');
+const frontendIndex = path.join(frontendDist, 'index.html');
+const hasFrontend = fs.existsSync(frontendIndex);
+
+if (hasFrontend) {
+  console.log(`[App] Serving frontend from ${frontendDist}`);
   app.use(express.static(frontendDist));
-  app.get('*', (req, res) => {
-    if (req.path.startsWith('/api/')) return;
-    res.sendFile(path.join(frontendDist, 'index.html'));
+  app.get('*', (req, res, next) => {
+    if (req.path.startsWith('/api/') || req.path.startsWith('/uploads/') || req.path === '/health') return next();
+    res.sendFile(frontendIndex, (err) => {
+      if (err) {
+        console.warn(`[App] SPA fallback failed for ${req.originalUrl}:`, err.message);
+        res.redirect(301, (process.env.FRONTEND_URL || '') + req.originalUrl);
+      }
+    });
   });
+} else {
+  console.log(`[App] Frontend dist not found at ${frontendDist} — only serving API`);
 }
 
 app.use((err, req, res, next) => {
