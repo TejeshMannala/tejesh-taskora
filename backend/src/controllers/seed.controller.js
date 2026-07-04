@@ -1213,7 +1213,7 @@ export const seedAcademicData = async (req, res) => {
     const created = await ensureAcademicDefaults();
 
     const io = getIO();
-    if (io) io.emitAcademicUpdate({ type: 'seed', action: 'upsert' });
+    if (io) io.emit('academic:updated', { type: 'seed', action: 'upsert' });
 
     const statusCode = created.groups || created.subjects ? 201 : 200;
     res.status(statusCode).json({

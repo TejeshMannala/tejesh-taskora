@@ -13,6 +13,7 @@ import { subjectApi } from '../../services/subjectApi';
 import { notificationApi } from '../../services/notificationApi';
 import { analyticsApi } from '../../services/analyticsApi';
 import { alarmApi } from '../../services/alarmApi';
+import { scheduleApi } from '../../services/scheduleApi';
 
 const containerVariants = {
   hidden: { opacity: 0 },
@@ -203,6 +204,7 @@ const Home = () => {
   const [notifications, setNotifications] = useState([]);
   const [stats, setStats] = useState(null);
   const [activeAlarms, setActiveAlarms] = useState([]);
+  const [todaySchedule, setTodaySchedule] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [currentTime, setCurrentTime] = useState(new Date());
@@ -230,12 +232,14 @@ const Home = () => {
       setNotifications(notificationData.notifications || []);
 
       try {
-        const [analyticsData, alarmData] = await Promise.all([
+        const [analyticsData, alarmData, scheduleData] = await Promise.all([
           analyticsApi.getDashboard().catch(() => ({ stats: null })),
           alarmApi.getActive().catch(() => ({ alarms: [] })),
+          scheduleApi.getToday().catch(() => ({ schedules: [], tasks: [] })),
         ]);
         setStats(analyticsData.stats);
         setActiveAlarms(alarmData.alarms || []);
+        setTodaySchedule(scheduleData.schedules || []);
       } catch {
         // non-critical
       }
@@ -465,6 +469,51 @@ const Home = () => {
           delay={0.25}
         />
       </motion.div>
+
+      {/* Daily Program */}
+      {todaySchedule.length > 0 && (
+        <motion.div variants={itemVariants}>
+          <h2 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
+            <FaClock className="text-secondary" size={16} />
+            Daily Program
+          </h2>
+          <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+            {todaySchedule.map((item, i) => (
+              <motion.div
+                key={item._id}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: i * 0.05 }}
+                className="rounded-xl border border-white/10 bg-white/5 p-4 hover:bg-white/10 transition-all"
+              >
+                <div className="flex items-center gap-2 mb-2">
+                  <div className="w-8 h-8 rounded-lg bg-primary/20 flex items-center justify-center text-primary text-xs font-bold">
+                    {item.type?.charAt(0) || 'S'}
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold text-white">{item.title || item.type}</p>
+                    {item.date && (
+                      <p className="text-xs text-gray-500">
+                        {new Date(item.date).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+                      </p>
+                    )}
+                  </div>
+                </div>
+                {item.tasks?.length > 0 && (
+                  <div className="space-y-1 mt-2 pl-10">
+                    {item.tasks.slice(0, 3).map((task) => (
+                      <p key={task._id} className="text-xs text-gray-400 flex items-center gap-1">
+                        <span className="w-1 h-1 rounded-full bg-gray-500" />
+                        {task.title}
+                      </p>
+                    ))}
+                  </div>
+                )}
+              </motion.div>
+            ))}
+          </div>
+        </motion.div>
+      )}
 
       {/* Quick Actions */}
       <motion.div variants={itemVariants}>

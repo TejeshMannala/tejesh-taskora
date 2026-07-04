@@ -5,22 +5,38 @@ dotenv.config();
 
 let transporter = null;
 
+const withTimeout = (promise, ms, label) => {
+  let timer;
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => {
+      timer = setTimeout(() => {
+        const err = new Error(`${label} timed out after ${ms}ms`);
+        err.code = 'EMAIL_TIMEOUT';
+        reject(err);
+      }, ms);
+    }),
+  ]).finally(() => clearTimeout(timer));
+};
+
 const getTransporter = () => {
   if (transporter) return transporter;
 
   const user = process.env.MAIL_USER || process.env.SMTP_USER;
   const pass = process.env.MAIL_PASS || process.env.SMTP_PASS;
 
-  // console.log('[EmailService] Creating transporter with user:', user || 'NOT FOUND');
-  // console.log('[EmailService] Password present:', pass ? 'YES' : 'NO');
-  // console.log('[EmailService] Host:', process.env.SMTP_HOST || 'smtp.gmail.com');
-  // console.log('[EmailService] Port:', process.env.SMTP_PORT || '587');
+  console.log('[EmailService] Creating transporter with user:', user || 'NOT FOUND');
+  console.log('[EmailService] Password present:', pass ? 'YES (masked)' : 'NO');
+  console.log('[EmailService] Host:', process.env.SMTP_HOST || 'smtp.gmail.com');
+  console.log('[EmailService] Port:', process.env.SMTP_PORT || '587');
+
+  const cleanPass = pass?.replace(/\s/g, '');
 
   transporter = nodemailer.createTransport({
     host: process.env.SMTP_HOST || 'smtp.gmail.com',
     port: parseInt(process.env.SMTP_PORT, 10) || 587,
     secure: process.env.SMTP_SECURE === 'true',
-    auth: { user, pass },
+    auth: { user, pass: cleanPass },
     connectionTimeout: 10000,
     greetingTimeout: 10000,
     socketTimeout: 15000,
@@ -32,7 +48,7 @@ const getTransporter = () => {
 export const verifyTransporter = async () => {
   try {
     const t = getTransporter();
-    await t.verify();
+    await withTimeout(t.verify(), 15000, 'SMTP verify');
     console.log('[EmailService] SMTP Connected — Gmail credentials are valid');
     return true;
   } catch (error) {
@@ -47,12 +63,17 @@ export const verifyTransporter = async () => {
 };
 
 export const sendOTPEmail = async (email, otp) => {
-  console.log('[EmailService] Sending OTP to:', email);
+  console.log(`[EmailService] Sending OTP to: ${email}`);
   const t = getTransporter();
   const user = process.env.MAIL_USER || process.env.SMTP_USER;
+  const pass = process.env.MAIL_PASS || process.env.SMTP_PASS;
+  const fromAddr = user || 'noreply@taskora.com';
+  console.log(`[EmailService] Using from address: ${fromAddr}`);
+  console.log(`[EmailService] Mail user: ${user}, pass length: ${pass ? pass.length : 0}`);
+
   try {
-    const info = await t.sendMail({
-      from: `"Taskora" <${user || 'noreply@taskora.com'}>`,
+    const mailPromise = t.sendMail({
+      from: `"Taskora" <${fromAddr}>`,
       to: email,
       subject: 'Taskora Password Reset OTP',
       html: `
@@ -70,12 +91,16 @@ export const sendOTPEmail = async (email, otp) => {
         </div>
       `,
     });
-    console.log('[EmailService] OTP email sent, messageId:', info.messageId);
+
+    const info = await withTimeout(mailPromise, 15000, 'SMTP sendMail');
+
+    console.log(`[EmailService] OTP email sent successfully — messageId: ${info.messageId}, response: ${info.response?.substring(0, 100)}`);
     return true;
   } catch (error) {
-    console.error('[EmailService] Failed to send OTP email');
+    console.error('[EmailService] Failed to send OTP email to:', email);
     console.error('[EmailService] Error code:', error.code || 'N/A');
     console.error('[EmailService] Error response:', error.response || 'N/A');
+    console.error('[EmailService] Error command:', error.command || 'N/A');
     console.error('[EmailService] Full message:', error.message);
     console.error('[EmailService] Stack:', error.stack || error);
     throw error;

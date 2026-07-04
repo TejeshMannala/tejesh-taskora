@@ -1,12 +1,13 @@
-import { useEffect, useMemo, useState, useCallback, useRef } from 'react';
+import { useEffect, useMemo, useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   FaBook, FaBookOpen, FaSearch, FaGraduationCap, FaPlus, FaTimes,
   FaSync, FaFilter, FaSortAmountDown, FaSortAmountUp, FaEdit, FaTrash,
   FaUniversity, FaCheckCircle, FaSpinner, FaExclamationTriangle,
 } from 'react-icons/fa';
-import { useSelector } from 'react-redux';
+import { useSelector, useDispatch } from 'react-redux';
 import toast from 'react-hot-toast';
+import { fetchProfile } from '../../redux/slices/authSlice';
 import { subjectApi } from '../../services/subjectApi';
 import { semesterApi } from '../../services/semesterApi';
 import { taskApi } from '../../services/taskApi';
@@ -55,6 +56,7 @@ const SkeletonSubjectCard = () => (
 );
 
 const Subjects = () => {
+  const dispatch = useDispatch();
   const { user } = useSelector((state) => state.auth);
   const [subjects, setSubjects] = useState([]);
   const [semesters, setSemesters] = useState([]);
@@ -69,12 +71,13 @@ const Subjects = () => {
   const [editingSubject, setEditingSubject] = useState(null);
   const [formData, setFormData] = useState({ name: '', color: '#7c3aed', icon: 'book', targetHours: 40 });
   const [taskCounts, setTaskCounts] = useState({});
-  const loadedRef = useRef(false);
 
   const loadData = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
+      await dispatch(fetchProfile());
+
       const [subjectData, semData] = await Promise.all([
         subjectApi.getAll().catch(() => ({ subjects: [] })),
         semesterApi.getAll().catch(() => ({ semesters: [] })),
@@ -123,13 +126,10 @@ const Subjects = () => {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [dispatch]);
 
   useEffect(() => {
-    if (!loadedRef.current) {
-      loadedRef.current = true;
-      loadData();
-    }
+    loadData();
   }, [loadData]);
 
   const filteredSubjects = useMemo(() => {
@@ -278,7 +278,15 @@ const Subjects = () => {
   if (!user?.group) {
     return (
       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
-        <h1 className="text-3xl font-bold text-white">Subjects</h1>
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <h1 className="text-3xl font-bold text-white">Subjects</h1>
+          <button
+            onClick={() => { dispatch(fetchProfile()); loadData(); }}
+            className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-gray-300 text-sm font-medium hover:bg-white/10 transition-all"
+          >
+            <FaSync size={12} /> Refresh
+          </button>
+        </div>
         <div className="flex flex-col items-center justify-center min-h-[40vh] text-center">
           <div className="rounded-2xl border border-dashed border-white/10 bg-white/5 p-12 max-w-md">
             <FaBookOpen size={48} className="mx-auto mb-4 text-gray-600" />
@@ -393,7 +401,31 @@ const Subjects = () => {
 
       {/* Subject Grid */}
       <AnimatePresence mode="wait">
-        {filteredSubjects.length === 0 ? (
+        {filteredSubjects.length === 0 && user?.group && !search && !selectedSemester ? (
+          <motion.div
+            key="empty"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            className="flex flex-col items-center justify-center min-h-[40vh] text-center"
+          >
+            <div className="rounded-2xl border border-dashed border-white/10 bg-white/5 p-12 max-w-md">
+              <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-primary/20 to-accent/20 flex items-center justify-center mx-auto mb-4">
+                <FaSpinner className="text-primary" size={28} />
+              </div>
+              <h3 className="text-lg font-semibold text-white mb-2">Generating your subjects...</h3>
+              <p className="text-gray-400 text-sm mb-6">
+                Your group subjects are being created. This should only take a moment.
+              </p>
+              <button
+                onClick={loadData}
+                className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-gradient-to-r from-primary to-accent text-white font-medium hover:shadow-lg hover:shadow-primary/25 transition-all"
+              >
+                <FaSync /> Retry
+              </button>
+            </div>
+          </motion.div>
+      ) : filteredSubjects.length === 0 ? (
           <motion.div
             key="empty"
             initial={{ opacity: 0, y: 20 }}

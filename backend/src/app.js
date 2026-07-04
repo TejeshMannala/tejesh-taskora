@@ -35,7 +35,7 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization'],
 }));
 
-app.options('*', cors());
+app.options(/.*/, cors());
 app.use(helmet({
   crossOriginOpenerPolicy: false,
   crossOriginResourcePolicy: { policy: 'cross-origin' },
@@ -43,6 +43,20 @@ app.use(helmet({
 app.use(morgan('dev'));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+app.use((req, res, next) => {
+  res.setTimeout(25000, () => {
+    if (!res.headersSent) {
+      console.error(`[Timeout] Request exceeded 25s — ${req.method} ${req.originalUrl}`);
+      res.status(503).json({
+        success: false,
+        message: 'Request timed out. Please try again.',
+        code: 'REQUEST_TIMEOUT',
+      });
+    }
+  });
+  next();
+});
 
 app.use('/uploads', express.static(path.join(__dirname, '..', 'uploads')));
 
@@ -153,11 +167,25 @@ app.use('/api/v1', (req, res, next) => {
 
 app.use('/api/v1', apiRoutes);
 
+app.use(/\/api\/v1\/.*/, (req, res) => {
+  console.warn(`[404] ${req.method} ${req.originalUrl} — route not found`);
+  res.status(404).json({ success: false, message: `Route not found: ${req.method} ${req.originalUrl}` });
+});
+
 app.use((err, req, res, next) => {
-  console.error(err.stack);
-  res.status(err.statusCode || 500).json({
+  const statusCode = err.statusCode || err.status || 500;
+  const message = err.message || 'Internal Server Error';
+
+  console.error(`[Error] ${statusCode} — ${req.method} ${req.originalUrl}`);
+  console.error(`  Message: ${message}`);
+  console.error(`  Stack: ${err.stack || 'N/A'}`);
+
+  if (res.headersSent) return next(err);
+
+  res.status(statusCode).json({
     success: false,
-    message: err.message || 'Internal Server Error',
+    message,
+    ...(process.env.NODE_ENV === 'development' && { stack: err.stack }),
   });
 });
 

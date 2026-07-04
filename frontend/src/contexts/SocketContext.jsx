@@ -2,7 +2,7 @@ import { createContext, useContext, useEffect, useRef } from 'react';
 import { io } from 'socket.io-client';
 import { useSelector, useDispatch } from 'react-redux';
 import { logout } from '../redux/slices/authSlice';
-import { API_BASE } from '../services/api';
+import api, { API_BASE } from '../services/api.js';
 
 const SocketContext = createContext();
 

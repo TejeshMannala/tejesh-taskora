@@ -14,28 +14,55 @@ const MONGO_URI = process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/taskora';
 
 // ── Startup validation ──────────────────────────────────────────────────
 const validateEnv = () => {
+  const errors = [];
   const warnings = [];
-  if (!process.env.JWT_SECRET || process.env.JWT_SECRET === 'fallback_secret') {
-    warnings.push('JWT_SECRET is missing or using fallback — set a strong secret in .env');
-  }
+
   if (!process.env.MONGO_URI) {
-    warnings.push('MONGO_URI is not set — using default localhost');
+    errors.push('MONGO_URI is not set — server cannot connect to database');
   }
+  if (!process.env.JWT_SECRET || process.env.JWT_SECRET === 'fallback_secret' || process.env.JWT_SECRET === 'supersecretjwtkey_replace_me_in_production') {
+    errors.push('JWT_SECRET is missing or using a placeholder — set a strong secret in .env');
+  }
+  if (process.env.JWT_SECRET === 'supersecretjwtkey_replace_me_in_production') {
+    console.error('[ENV] ⚠  JWT_SECRET is still the placeholder value! Generate a new one for production.');
+  }
+
   const mailUser = process.env.MAIL_USER || process.env.SMTP_USER;
   const mailPass = process.env.MAIL_PASS || process.env.SMTP_PASS;
   if (!mailUser || !mailPass) {
     warnings.push('SMTP/MAIL credentials missing — email sending will fail');
   }
+
   const googleId = process.env.GOOGLE_CLIENT_ID?.trim();
-  if (!googleId || googleId.includes('your_') || googleId.length < 20) {
+  const googleSecret = process.env.GOOGLE_CLIENT_SECRET?.trim();
+  if (!googleId || googleId.includes('your_') || googleId.length < 20 || !googleId.includes('.apps.googleusercontent.com')) {
     warnings.push('GOOGLE_CLIENT_ID is missing or invalid — Google SSO unavailable');
+  }
+  if (!googleSecret || googleSecret.includes('YOUR_')) {
+    warnings.push('GOOGLE_CLIENT_SECRET is missing or a placeholder — Google SSO may fail');
+  }
+
+  // Validate Google OAuth origins
+  const origins = [
+    'http://localhost:5173',
+    'https://tejesh-taskora-frontend.onrender.com',
+  ];
+  if (googleId && !googleId.includes('your_')) {
+    console.log('[GoogleOAuth] Required Authorized JavaScript Origins (add to https://console.cloud.google.com/apis/credentials):');
+    origins.forEach(o => console.log(`  - ${o}`));
+  }
+
+  if (errors.length > 0) {
+    console.error('── Startup Errors (FATAL) ────────────────────────');
+    errors.forEach((e) => console.error(`  ✖  ${e}`));
+    console.error('──────────────────────────────────────────────────');
   }
   if (warnings.length > 0) {
     console.warn('── Startup Warnings ──────────────────────────────');
     warnings.forEach((w) => console.warn(`  ⚠  ${w}`));
     console.warn('──────────────────────────────────────────────────');
   }
-  return warnings;
+  return { errors, warnings };
 };
 
 // ── Global error handlers ──────────────────────────────────────────────
@@ -104,7 +131,23 @@ process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
 process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 
 // ── Start HTTP server FIRST ──────────────────────────────────────────
-validateEnv();
+const { errors: fatalErrors } = validateEnv();
+
+console.log('── Server Startup ────────────────────────────────');
+console.log(`  Port:          ${PORT}`);
+console.log(`  Environment:   ${process.env.NODE_ENV || 'development'}`);
+console.log(`  MongoDB:       ${MONGO_URI ? MONGO_URI.substring(0, 30) + '...' : 'NOT SET'}`);
+console.log(`  Frontend URL:  ${process.env.FRONTEND_URL || 'http://localhost:5173'}`);
+console.log(`  JWT Expires:   ${process.env.JWT_EXPIRE || '30d'}`);
+console.log(`  JWT Secret:    ${process.env.JWT_SECRET ? (process.env.JWT_SECRET.includes('replace_me') ? '⚠ PLACEHOLDER' : '✓ Configured') : '✗ MISSING'}`);
+console.log(`  Google OAuth:  ${process.env.GOOGLE_CLIENT_ID?.includes('.apps.googleusercontent.com') ? '✓ Client ID OK' : '✗ Client ID missing/invalid'}`);
+console.log(`  SMTP:          ${(process.env.MAIL_USER || process.env.SMTP_USER) ? '✓ Credentials found' : '✗ Credentials missing'}`);
+console.log('──────────────────────────────────────────────────');
+
+if (fatalErrors.length > 0) {
+  console.error('[Server] FATAL: Environment validation failed. Fix the errors above before deploying.');
+}
+
 startServer(PORT);
 
 // ── THEN initialize MongoDB and other services in background ─────────
@@ -186,16 +229,20 @@ async function initializeServices() {
     const smtpOk = await verifyTransporter();
     if (!smtpOk) {
       console.warn('[SMTP] Email sending will fail — check .env MAIL_USER / MAIL_PASS');
+    } else {
+      console.log('[SMTP] Transporter verified — email sending is operational');
     }
 
-    console.log('All services initialized — server fully operational');
+    console.log('[Server] All services initialized — server fully operational');
+    console.log(`[Server] Health check: GET /api/health`);
+    console.log(`[Server] CORS origin:  ${process.env.FRONTEND_URL || 'http://localhost:5173'}`);
   } catch (err) {
-    console.error('MongoDB connection error:', err.message);
-    console.log('───────────────────────────────────────────────────────────');
-    console.log('  Server running in DEGRADED mode — database unavailable.');
-    console.log('  Health check:  GET /api/health');
-    console.log('  CORS origin:   ' + (process.env.FRONTEND_URL || 'http://localhost:5173'));
-    console.log('───────────────────────────────────────────────────────────');
+    // console.error('MongoDB connection error:', err.message);
+    // console.log('───────────────────────────────────────────────────────────');
+    // console.log('  Server running in DEGRADED mode — database unavailable.');
+    // console.log('  Health check:  GET /api/health');
+    // console.log('  CORS origin:   ' + (process.env.FRONTEND_URL || 'http://localhost:5173'));
+    // console.log('───────────────────────────────────────────────────────────');
   }
 }
 

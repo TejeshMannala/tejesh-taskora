@@ -10,8 +10,8 @@ import ErrorBoundary from './components/ui/ErrorBoundary.jsx'
 import './index.css'
 import App from './App.jsx'
 
-// Register Service Worker
-if ('serviceWorker' in navigator) {
+// Register Service Worker (production only — dev server bypasses SW cache)
+if ('serviceWorker' in navigator && import.meta.env.PROD) {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('/sw.js').catch(() => {});
   });

@@ -24,7 +24,7 @@ export const createGroup = async (req, res) => {
   try {
     const group = await Group.create(req.body);
     const io = getIO();
-    if (io) io.emitAcademicUpdate({ type: 'group', action: 'create' });
+    if (io) io.emit('academic:updated', { type: 'group', action: 'create' });
     res.status(201).json({ success: true, group });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
@@ -37,7 +37,7 @@ export const updateGroup = async (req, res) => {
     const group = await Group.findByIdAndUpdate(req.params.id, req.body, { returnDocument: 'after', runValidators: true });
     if (!group) return res.status(404).json({ success: false, message: 'Group not found' });
     const io = getIO();
-    if (io) io.emitAcademicUpdate({ type: 'group', action: 'update' });
+    if (io) io.emit('academic:updated', { type: 'group', action: 'update' });
     res.json({ success: true, group });
   } catch (error) {
     console.error('[admin updateGroup]', error);
@@ -53,7 +53,7 @@ export const deleteGroup = async (req, res) => {
     await Subject.deleteMany({ group: req.params.id });
     await Roadmap.deleteMany({ subject: { $in: (await Subject.find({ group: req.params.id }).select('_id')).map(s => s._id) } });
     const io = getIO();
-    if (io) io.emitAcademicUpdate({ type: 'group', action: 'delete' });
+    if (io) io.emit('academic:updated', { type: 'group', action: 'delete' });
     res.json({ success: true, message: 'Group deleted' });
   } catch (error) {
     console.error('[admin deleteGroup]', error);
@@ -79,7 +79,7 @@ export const createSubject = async (req, res) => {
     const subject = await Subject.create(req.body);
     const populated = await subject.populate('group', 'name educationType');
     const io = getIO();
-    if (io) io.emitAcademicUpdate({ type: 'subject', action: 'create' });
+    if (io) io.emit('academic:updated', { type: 'subject', action: 'create' });
     res.status(201).json({ success: true, subject: populated });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
@@ -92,7 +92,7 @@ export const updateSubject = async (req, res) => {
     const subject = await Subject.findByIdAndUpdate(req.params.id, req.body, { returnDocument: 'after', runValidators: true }).populate('group', 'name educationType');
     if (!subject) return res.status(404).json({ success: false, message: 'Subject not found' });
     const io = getIO();
-    if (io) io.emitAcademicUpdate({ type: 'subject', action: 'update' });
+    if (io) io.emit('academic:updated', { type: 'subject', action: 'update' });
     res.json({ success: true, subject });
   } catch (error) {
     console.error('[admin updateSubject]', error);
@@ -107,7 +107,7 @@ export const deleteSubject = async (req, res) => {
     if (!subject) return res.status(404).json({ success: false, message: 'Subject not found' });
     await Roadmap.deleteMany({ subject: req.params.id });
     const io = getIO();
-    if (io) io.emitAcademicUpdate({ type: 'subject', action: 'delete' });
+    if (io) io.emit('academic:updated', { type: 'subject', action: 'delete' });
     res.json({ success: true, message: 'Subject deleted' });
   } catch (error) {
     console.error('[admin deleteSubject]', error);
@@ -133,7 +133,7 @@ export const createRoadmap = async (req, res) => {
     const roadmap = await Roadmap.create(req.body);
     const populated = await roadmap.populate('subject', 'name');
     const io = getIO();
-    if (io) io.emitAcademicUpdate({ type: 'roadmap', action: 'create' });
+    if (io) io.emit('academic:updated', { type: 'roadmap', action: 'create' });
     res.status(201).json({ success: true, roadmap: populated });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
@@ -146,7 +146,7 @@ export const updateRoadmap = async (req, res) => {
     const roadmap = await Roadmap.findByIdAndUpdate(req.params.id, req.body, { returnDocument: 'after', runValidators: true }).populate('subject', 'name');
     if (!roadmap) return res.status(404).json({ success: false, message: 'Roadmap not found' });
     const io = getIO();
-    if (io) io.emitAcademicUpdate({ type: 'roadmap', action: 'update' });
+    if (io) io.emit('academic:updated', { type: 'roadmap', action: 'update' });
     res.json({ success: true, roadmap });
   } catch (error) {
     console.error('[admin updateRoadmap]', error);
@@ -160,7 +160,7 @@ export const deleteRoadmap = async (req, res) => {
     const roadmap = await Roadmap.findByIdAndDelete(req.params.id);
     if (!roadmap) return res.status(404).json({ success: false, message: 'Roadmap not found' });
     const io = getIO();
-    if (io) io.emitAcademicUpdate({ type: 'roadmap', action: 'delete' });
+    if (io) io.emit('academic:updated', { type: 'roadmap', action: 'delete' });
     res.json({ success: true, message: 'Roadmap deleted' });
   } catch (error) {
     console.error('[admin deleteRoadmap]', error);

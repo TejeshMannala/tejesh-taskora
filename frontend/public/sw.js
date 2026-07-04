@@ -1,4 +1,5 @@
-const CACHE_NAME = 'taskora-alarm-cache-v2';
+// Bump CACHE_NAME when deploying to force re-caching stale assets.
+const CACHE_NAME = 'taskora-alarm-cache-v3';
 
 // Only cache static assets (JS, CSS, images, fonts), NEVER API responses.
 // BUG FIX: Previously the SW cached ALL requests including API calls.
@@ -8,6 +9,7 @@ const CACHE_NAME = 'taskora-alarm-cache-v2';
 // kept returning 401 forever. This is the "infinite 401" bug.
 const API_PATTERN = /^\/api\//;
 const STATIC_EXTENSIONS = /\.(js|css|png|jpg|jpeg|gif|svg|ico|woff2?|ttf|eot)$/;
+const DEV_PATTERN = /^https?:\/\/localhost(:\d+)?\//;
 
 self.addEventListener('install', (event) => {
   self.skipWaiting();
@@ -67,23 +69,26 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
+  // BUG FIX: Never intercept Vite dev-server requests on localhost.
+  if (DEV_PATTERN.test(url.href)) {
+    return;
+  }
+
   // BUG FIX: Skip caching for all API requests — never cache 401/500 responses.
   if (API_PATTERN.test(url.pathname)) {
     return;
   }
 
-  // Only cache static assets
+  // Only cache static assets (network-first, fallback to cache for offline).
   if (STATIC_EXTENSIONS.test(url.pathname)) {
     event.respondWith(
-      caches.match(event.request).then((cached) => {
-        return cached || fetch(event.request).then((response) => {
-          const cloned = response.clone();
-          caches.open(CACHE_NAME).then((cache) => {
-            cache.put(event.request, cloned);
-          });
-          return response;
+      fetch(event.request).then((response) => {
+        const cloned = response.clone();
+        caches.open(CACHE_NAME).then((cache) => {
+          cache.put(event.request, cloned);
         });
-      })
+        return response;
+      }).catch(() => caches.match(event.request))
     );
   }
 });

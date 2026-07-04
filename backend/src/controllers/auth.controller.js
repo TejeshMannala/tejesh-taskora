@@ -289,8 +289,10 @@ export const loginUser = async (req, res) => {
 
 export const googleLogin = async (req, res) => {
   try {
+    console.log('[GoogleAuth] Login attempt received');
     const ip = req.ip || req.connection.remoteAddress;
     if (!checkLoginLimit(ip)) {
+      console.warn(`[GoogleAuth] Rate limit exceeded for IP: ${ip}`);
       return res.status(429).json({
         success: false,
         message: 'Too many login attempts (5 per day). Please try again tomorrow.',
@@ -299,10 +301,28 @@ export const googleLogin = async (req, res) => {
 
     const { credential } = req.body;
     if (!credential) {
+      console.warn('[GoogleAuth] No credential in request body');
       return res.status(400).json({ success: false, message: 'Google credential is required' });
     }
 
-    const { googleId, email, name, picture } = await getGoogleProfile(credential);
+    console.log('[GoogleAuth] Verifying Google credential...');
+    let profile;
+    try {
+      profile = await getGoogleProfile(credential);
+    } catch (profileError) {
+      console.error('[GoogleAuth] Profile fetch failed:', profileError.message);
+      console.error('[GoogleAuth] Go to https://console.cloud.google.com/apis/credentials');
+      console.error('[GoogleAuth] Select your OAuth 2.0 Client ID and ADD these to Authorized JavaScript Origins:');
+      console.error('[GoogleAuth]   - http://localhost:5173');
+      console.error('[GoogleAuth]   - https://tejesh-taskora-frontend.onrender.com');
+      console.error('[GoogleAuth] If you still get errors, also add to Authorized Redirect URIs:');
+      console.error('[GoogleAuth]   - http://localhost:5173');
+      console.error('[GoogleAuth]   - https://tejesh-taskora-frontend.onrender.com');
+      throw profileError;
+    }
+
+    const { googleId, email, name, picture } = profile;
+    console.log(`[GoogleAuth] Profile obtained — email: ${email}, googleId: ${googleId ? googleId.substring(0, 8) + '...' : 'N/A'}`);
     if (!googleId || !email) {
       return res.status(400).json({
         success: false,
@@ -349,26 +369,45 @@ export const googleLogin = async (req, res) => {
       }
     }
 
+    console.log(`[GoogleAuth] Login successful for: ${email}`);
     return res.json(await formatAuthResponse(user, 'Google login successful'));
   } catch (error) {
-    console.error('[GoogleAuth] Failed:', error.stack || error);
     const rawMessage = error.message || '';
+    console.error('[GoogleAuth] Failed:', rawMessage);
+    console.error('[GoogleAuth] Full error:', error.stack || error);
+
     let message;
     if (rawMessage.includes('invalid or expired')) {
       message = 'Your Google session expired. Please sign in again.';
     } else if (rawMessage.includes('401') || rawMessage.includes('userinfo')) {
-      message = 'Google rejected the access token. Make sure your Google Cloud Console has http://localhost:5173 in Authorized JavaScript Origins.';
+      message = 'Google rejected the access token. Make sure your Google Cloud Console has the frontend URL in Authorized JavaScript Origins.';
+    } else if (rawMessage.includes('origin_mismatch') || rawMessage.includes('redirect_uri_mismatch')) {
+      message = 'Google origin mismatch. Add these URLs to Google Cloud Console > Credentials > Authorized JavaScript Origins:\n' +
+        '  - http://localhost:5173\n' +
+        '  - https://tejesh-taskora-frontend.onrender.com\n' +
+        'And to Authorized Redirect URIs:\n' +
+        '  - http://localhost:5173\n' +
+        '  - https://tejesh-taskora-frontend.onrender.com';
     } else if (rawMessage.includes('user ID') || rawMessage.includes('email')) {
       message = rawMessage;
+    } else if (rawMessage.includes('timed out')) {
+      message = 'Google authentication timed out. Check your internet connection or Google Cloud quota.';
+    } else if (rawMessage.includes('Network error')) {
+      message = 'Network error contacting Google. Check your internet connection.';
     } else {
-      message = 'Google authentication failed. Check that frontend/.env VITE_GOOGLE_CLIENT_ID and backend/.env GOOGLE_CLIENT_ID are the same, and add your frontend URL to Authorized JavaScript Origins in Google Cloud Console.';
+      message = 'Google authentication failed. Ensure:\n' +
+        '  1. frontend/.env VITE_GOOGLE_CLIENT_ID matches backend/.env GOOGLE_CLIENT_ID\n' +
+        '  2. Google Cloud Console has these Authorized JavaScript Origins:\n' +
+        '     - http://localhost:5173\n' +
+        '     - https://tejesh-taskora-frontend.onrender.com\n' +
+        '  3. backend/.env GOOGLE_CLIENT_SECRET is NOT a placeholder';
     }
 
-    return res.status(500).json({ 
-      success: false, 
+    return res.status(500).json({
+      success: false,
       message,
       error: error.message,
-      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined,
     });
   }
 };

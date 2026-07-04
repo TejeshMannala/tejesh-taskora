@@ -12,16 +12,35 @@ export const sendOTP = async (req, res) => {
     }
 
     const normalizedEmail = email.trim().toLowerCase();
+    console.log(`[OTP] Send OTP requested for: ${normalizedEmail}`);
 
     const user = await User.findOne({ email: normalizedEmail });
     if (!user) {
+      console.warn(`[OTP] No account found for email: ${normalizedEmail}`);
       return res.status(404).json({ success: false, message: 'No account found with this email' });
+    }
+
+    const existingOTP = await OTP.findOne({
+      email: normalizedEmail,
+      verified: false,
+      expiresAt: { $gt: new Date() },
+    }).sort({ createdAt: -1 });
+
+    if (existingOTP) {
+      const remainingMs = existingOTP.expiresAt.getTime() - Date.now();
+      const remainingSec = Math.ceil(remainingMs / 1000);
+      console.log(`[OTP] Existing unexpired OTP found for ${normalizedEmail} — expires in ${remainingSec}s`);
+      return res.json({
+        success: true,
+        message: 'OTP already sent. Please check your email or wait for it to expire.',
+      });
     }
 
     await OTP.deleteMany({ email: normalizedEmail, verified: false });
 
     const otp = generateOTP();
     const expiresAt = new Date(Date.now() + 5 * 60 * 1000);
+    console.log(`[OTP] Generated OTP for ${normalizedEmail}, expires at ${expiresAt.toISOString()}`);
 
     await OTP.create({
       email: normalizedEmail,
@@ -31,8 +50,9 @@ export const sendOTP = async (req, res) => {
 
     try {
       await sendOTPEmail(normalizedEmail, otp);
+      console.log(`[OTP] OTP email sent successfully to ${normalizedEmail}`);
     } catch (emailError) {
-      console.error('[OTP] Email send failed: code=' + emailError.code + ' msg=' + emailError.message);
+      console.error(`[OTP] Email send failed for ${normalizedEmail}: code=${emailError.code} msg=${emailError.message}`);
 
       await OTP.deleteMany({ email: normalizedEmail, otp });
 
@@ -68,6 +88,7 @@ export const verifyOTP = async (req, res) => {
 
     const normalizedEmail = email.trim().toLowerCase();
     const trimmedOtp = otp.trim();
+    console.log(`[OTP] Verify OTP for: ${normalizedEmail}`);
 
     const otpRecord = await OTP.findOne({
       email: normalizedEmail,
@@ -75,21 +96,27 @@ export const verifyOTP = async (req, res) => {
     }).sort({ createdAt: -1 });
 
     if (!otpRecord) {
+      console.warn(`[OTP] No OTP record found for ${normalizedEmail}`);
       return res.json({ success: false, message: 'Invalid OTP' });
     }
 
+    console.log(`[OTP] OTP record found — createdAt: ${otpRecord.createdAt}, expiresAt: ${otpRecord.expiresAt}`);
+
     if (new Date() > otpRecord.expiresAt) {
+      console.warn(`[OTP] OTP expired for ${normalizedEmail} — was valid until ${otpRecord.expiresAt}`);
       otpRecord.verified = true;
       await otpRecord.save();
-      return res.json({ success: false, message: 'OTP expired' });
+      return res.json({ success: false, message: 'OTP expired. Please request a new one.' });
     }
 
     if (otpRecord.otp !== trimmedOtp) {
+      console.warn(`[OTP] OTP mismatch for ${normalizedEmail} — expected: ${otpRecord.otp}, received: ${trimmedOtp}`);
       return res.json({ success: false, message: 'Invalid OTP' });
     }
 
     otpRecord.verified = true;
     await otpRecord.save();
+    console.log(`[OTP] OTP verified successfully for ${normalizedEmail}`);
 
     res.json({
       success: true,
@@ -115,6 +142,7 @@ export const resetPassword = async (req, res) => {
     }
 
     const normalizedEmail = email.trim().toLowerCase();
+    console.log(`[OTP] Password reset requested for: ${normalizedEmail}`);
 
     const otpRecord = await OTP.findOne({
       email: normalizedEmail,
@@ -122,11 +150,18 @@ export const resetPassword = async (req, res) => {
     }).sort({ createdAt: -1 });
 
     if (!otpRecord) {
+      console.warn(`[OTP] No verified OTP found for ${normalizedEmail} — password reset rejected`);
       return res.status(400).json({ success: false, message: 'Please verify OTP first' });
+    }
+
+    if (new Date() > otpRecord.expiresAt) {
+      console.warn(`[OTP] Verified OTP has expired for ${normalizedEmail} — password reset rejected`);
+      return res.status(400).json({ success: false, message: 'OTP has expired. Please request a new one.' });
     }
 
     const user = await User.findOne({ email: normalizedEmail }).select('+password');
     if (!user) {
+      console.warn(`[OTP] User not found for ${normalizedEmail} — password reset rejected`);
       return res.status(404).json({ success: false, message: 'User not found' });
     }
 
@@ -134,6 +169,7 @@ export const resetPassword = async (req, res) => {
     await user.save();
 
     await OTP.deleteMany({ email: normalizedEmail });
+    console.log(`[OTP] Password reset successful for ${normalizedEmail}`);
 
     res.json({
       success: true,
