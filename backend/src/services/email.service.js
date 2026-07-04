@@ -3,8 +3,6 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
-let transporter = null;
-
 const withTimeout = (promise, ms, label) => {
   let timer;
   return Promise.race([
@@ -19,9 +17,7 @@ const withTimeout = (promise, ms, label) => {
   ]).finally(() => clearTimeout(timer));
 };
 
-const getTransporter = () => {
-  if (transporter) return transporter;
-
+const createTransporter = () => {
   const user = process.env.MAIL_USER || process.env.SMTP_USER;
   const pass = process.env.MAIL_PASS || process.env.SMTP_PASS;
 
@@ -32,7 +28,7 @@ const getTransporter = () => {
 
   const cleanPass = pass?.replace(/\s/g, '');
 
-  transporter = nodemailer.createTransport({
+  return nodemailer.createTransport({
     host: process.env.SMTP_HOST || 'smtp.gmail.com',
     port: parseInt(process.env.SMTP_PORT, 10) || 587,
     secure: process.env.SMTP_SECURE === 'true',
@@ -41,13 +37,11 @@ const getTransporter = () => {
     greetingTimeout: 10000,
     socketTimeout: 15000,
   });
-
-  return transporter;
 };
 
 export const verifyTransporter = async () => {
   try {
-    const t = getTransporter();
+    const t = createTransporter();
     await withTimeout(t.verify(), 15000, 'SMTP verify');
     console.log('[EmailService] SMTP Connected — Gmail credentials are valid');
     return true;
@@ -64,7 +58,7 @@ export const verifyTransporter = async () => {
 
 export const sendOTPEmail = async (email, otp) => {
   console.log(`[EmailService] Sending OTP to: ${email}`);
-  const t = getTransporter();
+  const t = createTransporter();
   const user = process.env.MAIL_USER || process.env.SMTP_USER;
   const pass = process.env.MAIL_PASS || process.env.SMTP_PASS;
   const fromAddr = user || 'noreply@taskora.com';
