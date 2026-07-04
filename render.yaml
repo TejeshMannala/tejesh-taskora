@@ -8,7 +8,13 @@ services:
     region: singapore
     plan: free
     rootDir: backend
-    buildCommand: npm install && cd ../frontend && npm install && npm run build
+    buildCommand: |
+      npm install --ignore-scripts &&
+      cd ../frontend &&
+      npm install --ignore-scripts &&
+      npm run build &&
+      mkdir -p ../backend/frontend-dist &&
+      cp -r dist/* ../backend/frontend-dist/
     startCommand: npm start
     healthCheckPath: /api/health
     envVars:

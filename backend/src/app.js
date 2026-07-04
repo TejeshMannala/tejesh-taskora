@@ -174,7 +174,7 @@ app.use(/\/api\/v1\/.*/, (req, res) => {
 });
 
 // Serve frontend build (SPA fallback for page refresh support)
-const frontendDist = path.join(__dirname, '..', '..', 'frontend', 'dist');
+const frontendDist = path.join(__dirname, '..', 'frontend-dist');
 const frontendIndex = path.join(frontendDist, 'index.html');
 const hasFrontend = fs.existsSync(frontendIndex);
 
