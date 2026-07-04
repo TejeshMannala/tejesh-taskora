@@ -181,12 +181,17 @@ const hasFrontend = fs.existsSync(frontendIndex);
 if (hasFrontend) {
   console.log(`[App] Serving frontend from ${frontendDist}`);
   app.use(express.static(frontendDist));
-  app.get('*', (req, res, next) => {
+  app.use((req, res, next) => {
+    if (req.method !== 'GET') return next();
     if (req.path.startsWith('/api/') || req.path.startsWith('/uploads/') || req.path === '/health') return next();
     res.sendFile(frontendIndex, (err) => {
       if (err) {
         console.warn(`[App] SPA fallback failed for ${req.originalUrl}:`, err.message);
-        res.redirect(301, (process.env.FRONTEND_URL || '') + req.originalUrl);
+        if (process.env.FRONTEND_URL) {
+          res.redirect(301, process.env.FRONTEND_URL + req.originalUrl);
+        } else {
+          next(err);
+        }
       }
     });
   });
