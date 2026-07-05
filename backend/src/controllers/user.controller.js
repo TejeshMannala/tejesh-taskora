@@ -6,6 +6,7 @@ import SharedSubject from '../models/sharedSubject.model.js';
 import bcrypt from 'bcryptjs';
 import generateToken from '../utils/generateToken.js';
 import { generateUserSemesters } from './semester.controller.js';
+import { uploadToCloud, deleteFromCloud } from '../services/upload.service.js';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -180,11 +181,6 @@ export const updateProfile = async (req, res) => {
 
 export const uploadProfileImage = async (req, res) => {
   try {
-    const uploadsDir = path.join(__dirname, '..', '..', 'uploads');
-    if (!fs.existsSync(uploadsDir)) {
-      fs.mkdirSync(uploadsDir, { recursive: true });
-    }
-
     if (!req.file) {
       return res.status(400).json({ success: false, message: 'No image file provided' });
     }
@@ -192,25 +188,48 @@ export const uploadProfileImage = async (req, res) => {
     const oldUser = await User.findById(req.user._id);
     if (!oldUser) return res.status(404).json({ success: false, message: 'User not found' });
 
-    const oldProfilePicture = oldUser.profilePicture;
+    let imageUrl;
+    const useCloudinary = !!process.env.CLOUDINARY_URL;
 
-    const imageUrl = `/uploads/${req.file.filename}`;
-    const user = await User.findByIdAndUpdate(
-      req.user._id,
-      {
-        profilePicture: imageUrl,
-        avatar: imageUrl,
-      },
-      { new: true }
-    );
+    if (useCloudinary && req.file.buffer) {
+      // Upload from memory buffer to Cloudinary
+      const cloudUrl = await uploadToCloud(
+        req.file.buffer,
+        req.file.originalname,
+        'taskora/profiles'
+      );
+      if (cloudUrl) {
+        imageUrl = cloudUrl;
+      }
+    }
 
-    if (oldProfilePicture) {
-      const oldFilename = oldProfilePicture.replace('/uploads/', '');
+    if (!imageUrl && req.file.filename) {
+      // Fallback: local disk storage
+      const uploadsDir = path.join(__dirname, '..', '..', 'uploads');
+      if (!fs.existsSync(uploadsDir)) {
+        fs.mkdirSync(uploadsDir, { recursive: true });
+      }
+      imageUrl = `/uploads/${req.file.filename}`;
+    }
+
+    // Delete old profile picture from Cloudinary if exists
+    if (oldUser.profilePicture && oldUser.profilePicture.includes('cloudinary.com')) {
+      const publicId = oldUser.profilePicture.split('/').slice(-2).join('/').replace(/\.[^.]+$/, '');
+      deleteFromCloud(publicId);
+    } else if (oldUser.profilePicture) {
+      // Delete old local file
+      const oldFilename = oldUser.profilePicture.replace('/uploads/', '');
       const oldPath = path.join(__dirname, '..', '..', 'uploads', oldFilename);
       try {
         if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
       } catch {}
     }
+
+    const user = await User.findByIdAndUpdate(
+      req.user._id,
+      { profilePicture: imageUrl, avatar: imageUrl },
+      { new: true }
+    );
 
     res.json({
       success: true,

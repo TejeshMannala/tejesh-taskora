@@ -1,9 +1,9 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   FaSpinner, FaCheckCircle, FaTimesCircle, FaEnvelope, FaLock,
-  FaEye, FaEyeSlash, FaArrowLeft, FaArrowRight, FaLockOpen, FaShieldAlt,
+  FaEye, FaEyeSlash, FaArrowLeft, FaArrowRight, FaLockOpen, FaShieldAlt, FaRedo,
 } from 'react-icons/fa';
 import { authApi } from '../../services/authApi';
 
@@ -22,6 +22,29 @@ const ForgotPassword = () => {
   const [loading, setLoading] = useState(false);
   const [otpVerified, setOtpVerified] = useState(false);
   const [message, setMessage] = useState({ text: '', type: '' });
+  const [resendCooldown, setResendCooldown] = useState(0);
+  const cooldownRef = useRef(null);
+
+  useEffect(() => {
+    return () => {
+      if (cooldownRef.current) clearInterval(cooldownRef.current);
+    };
+  }, []);
+
+  const startResendCooldown = (seconds = 30) => {
+    setResendCooldown(seconds);
+    if (cooldownRef.current) clearInterval(cooldownRef.current);
+    cooldownRef.current = setInterval(() => {
+      setResendCooldown((prev) => {
+        if (prev <= 1) {
+          clearInterval(cooldownRef.current);
+          cooldownRef.current = null;
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+  };
 
   const showMessage = useCallback((text, type) => {
     setMessage({ text, type });
@@ -38,6 +61,7 @@ const ForgotPassword = () => {
       const data = await authApi.sendOTP(email.trim());
       if (data.success) {
         setStep(STEP_OTP);
+        startResendCooldown(30);
         const msg = data.otp ? `OTP: ${data.otp} (dev mode)` : 'A 6-digit OTP has been sent to your email';
         showMessage(msg, 'success');
       } else {
@@ -261,6 +285,35 @@ const ForgotPassword = () => {
                     </button>
                   </motion.div>
                 )}
+                {!otpVerified && (resendCooldown > 0 ? (
+                  <p className="text-center text-gray-500 text-sm">
+                    Resend OTP in <span className="text-gray-300 font-medium">{resendCooldown}s</span>
+                  </p>
+                ) : (
+                  <button
+                    onClick={async () => {
+                      setOtp('');
+                      setLoading(true);
+                      try {
+                        const data = await authApi.sendOTP(email.trim());
+                        if (data.success) {
+                          startResendCooldown(30);
+                          showMessage('OTP resent successfully', 'success');
+                        } else {
+                          showMessage(data.message || 'Failed to resend OTP', 'error');
+                        }
+                      } catch (err) {
+                        showMessage('Failed to resend OTP. Please try again.', 'error');
+                      } finally {
+                        setLoading(false);
+                      }
+                    }}
+                    disabled={loading}
+                    className="w-full text-gray-500 hover:text-gray-300 text-sm transition-colors flex items-center justify-center gap-1.5 disabled:opacity-40"
+                  >
+                    <FaRedo size={12} /> Resend OTP
+                  </button>
+                ))}
                 <button
                   onClick={() => { setStep(STEP_EMAIL); setOtp(''); setOtpVerified(false); }}
                   className="w-full text-gray-500 hover:text-gray-300 text-sm transition-colors flex items-center justify-center gap-1.5"

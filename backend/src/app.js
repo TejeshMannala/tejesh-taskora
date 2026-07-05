@@ -1,5 +1,6 @@
 import express from 'express';
 import cors from 'cors';
+import compression from 'compression';
 import dotenv from 'dotenv';
 import helmet from 'helmet';
 import morgan from 'morgan';
@@ -37,6 +38,10 @@ app.use(cors({
 }));
 
 app.options(/.*/, cors());
+
+// Response compression — improves API response times significantly
+app.use(compression({ level: 6, threshold: 1024 }));
+
 app.use(helmet({
   crossOriginOpenerPolicy: false,
   crossOriginResourcePolicy: { policy: 'cross-origin' },
@@ -59,7 +64,16 @@ app.use((req, res, next) => {
   next();
 });
 
-app.use('/uploads', express.static(path.join(__dirname, '..', 'uploads')));
+// Serve uploads directory first, with fallback for missing images
+app.use('/uploads', express.static(path.join(__dirname, '..', 'uploads'), {
+  fallthrough: true,
+}));
+
+// Missing image fallback — return a 1x1 transparent pixel instead of 404
+app.use('/uploads', (req, res, next) => {
+  if (req.method !== 'GET') return next();
+  res.status(404).json({ success: false, message: 'Image not found. Uploads may have been lost on redeploy — use Cloudinary for persistent storage.' });
+});
 
 app.get('/health', (req, res) => {
   const dbConnected = mongoose.connection.readyState === 1;

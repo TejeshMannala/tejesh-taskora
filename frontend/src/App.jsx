@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, lazy, Suspense } from 'react';
 import { Navigate, Routes, Route } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import { useDispatch, useSelector } from 'react-redux';
@@ -15,13 +15,13 @@ import ProtectedRoute from './components/auth/ProtectedRoute';
 import AgreementPopup from './components/auth/AgreementPopup';
 import AlarmOverlay from './components/alarm/AlarmOverlay';
 
-import Home from './pages/Home/index';
-import Tasks from './pages/Tasks/index';
-import Reminders from './pages/Reminders/index';
-import Notifications from './pages/Notifications/index';
-import Profile from './pages/Profile/index';
-import Settings from './pages/Settings/index';
-import Subjects from './pages/Subjects/index';
+const Home = lazy(() => import('./pages/Home/index'));
+const Tasks = lazy(() => import('./pages/Tasks/index'));
+const Reminders = lazy(() => import('./pages/Reminders/index'));
+const Notifications = lazy(() => import('./pages/Notifications/index'));
+const Profile = lazy(() => import('./pages/Profile/index'));
+const Settings = lazy(() => import('./pages/Settings/index'));
+const Subjects = lazy(() => import('./pages/Subjects/index'));
 
 import './index.css';
 
@@ -65,14 +65,14 @@ function App() {
         <Route path="/forgotten-password" element={<ErrorBoundary><ForgotPassword /></ErrorBoundary>} />
         <Route element={<ProtectedRoute />}>
           <Route element={<AcademicProvider><MainLayout /></AcademicProvider>}>
-            <Route path="/home" element={<ErrorBoundary><Home /></ErrorBoundary>} />
+            <Route path="/home" element={<Suspense fallback={<PageLoader />}><ErrorBoundary><Home /></ErrorBoundary></Suspense>} />
             <Route path="/dashboard" element={<Navigate to="/home" replace />} />
-            <Route path="/tasks" element={<ErrorBoundary><Tasks /></ErrorBoundary>} />
-            <Route path="/reminders" element={<ErrorBoundary><Reminders /></ErrorBoundary>} />
-            <Route path="/notifications" element={<ErrorBoundary><Notifications /></ErrorBoundary>} />
-            <Route path="/profile" element={<ErrorBoundary><Profile /></ErrorBoundary>} />
-            <Route path="/settings" element={<ErrorBoundary><Settings /></ErrorBoundary>} />
-            <Route path="/subjects" element={<ErrorBoundary><Subjects /></ErrorBoundary>} />
+            <Route path="/tasks" element={<Suspense fallback={<PageLoader />}><ErrorBoundary><Tasks /></ErrorBoundary></Suspense>} />
+            <Route path="/reminders" element={<Suspense fallback={<PageLoader />}><ErrorBoundary><Reminders /></ErrorBoundary></Suspense>} />
+            <Route path="/notifications" element={<Suspense fallback={<PageLoader />}><ErrorBoundary><Notifications /></ErrorBoundary></Suspense>} />
+            <Route path="/profile" element={<Suspense fallback={<PageLoader />}><ErrorBoundary><Profile /></ErrorBoundary></Suspense>} />
+            <Route path="/settings" element={<Suspense fallback={<PageLoader />}><ErrorBoundary><Settings /></ErrorBoundary></Suspense>} />
+            <Route path="/subjects" element={<Suspense fallback={<PageLoader />}><ErrorBoundary><Subjects /></ErrorBoundary></Suspense>} />
             <Route path="/calendar" element={<Navigate to="/tasks" replace />} />
           </Route>
         </Route>
@@ -81,5 +81,14 @@ function App() {
     </div>
   );
 }
+
+const PageLoader = () => (
+  <div className="flex min-h-[60vh] items-center justify-center">
+    <div className="flex flex-col items-center gap-3">
+      <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+      <p className="text-sm text-gray-400">Loading...</p>
+    </div>
+  </div>
+);
 
 export default App;

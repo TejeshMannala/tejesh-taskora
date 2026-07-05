@@ -56,14 +56,18 @@ export const verifyTransporter = async () => {
   }
 };
 
-export const sendOTPEmail = async (email, otp) => {
-  console.log(`[EmailService] Sending OTP to: ${email}`);
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+export const sendOTPEmail = async (email, otp, attempt = 1) => {
+  const MAX_ATTEMPTS = 3;
+  const RETRY_DELAY = 2000;
+
+  console.log(`[EmailService] Sending OTP to: ${email} (attempt ${attempt}/${MAX_ATTEMPTS})`);
   const t = createTransporter();
   const user = process.env.MAIL_USER || process.env.SMTP_USER;
   const pass = process.env.MAIL_PASS || process.env.SMTP_PASS;
   const fromAddr = user || 'noreply@taskora.com';
   console.log(`[EmailService] Using from address: ${fromAddr}`);
-  console.log(`[EmailService] Mail user: ${user}, pass length: ${pass ? pass.length : 0}`);
 
   try {
     const mailPromise = t.sendMail({
@@ -91,12 +95,18 @@ export const sendOTPEmail = async (email, otp) => {
     console.log(`[EmailService] OTP email sent successfully — messageId: ${info.messageId}, response: ${info.response?.substring(0, 100)}`);
     return true;
   } catch (error) {
-    console.error('[EmailService] Failed to send OTP email to:', email);
+    console.error(`[EmailService] Attempt ${attempt}/${MAX_ATTEMPTS} failed for ${email}:`, error.message);
+
+    if (attempt < MAX_ATTEMPTS) {
+      console.log(`[EmailService] Retrying in ${RETRY_DELAY}ms...`);
+      await sleep(RETRY_DELAY);
+      return sendOTPEmail(email, otp, attempt + 1);
+    }
+
+    console.error(`[EmailService] All ${MAX_ATTEMPTS} attempts failed for ${email}`);
     console.error('[EmailService] Error code:', error.code || 'N/A');
     console.error('[EmailService] Error response:', error.response || 'N/A');
-    console.error('[EmailService] Error command:', error.command || 'N/A');
     console.error('[EmailService] Full message:', error.message);
-    console.error('[EmailService] Stack:', error.stack || error);
     throw error;
   }
 };
