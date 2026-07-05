@@ -1,5 +1,7 @@
 // Bump CACHE_NAME when deploying to force re-caching stale assets.
-const CACHE_NAME = 'taskora-alarm-cache-v3';
+const CACHE_NAME = 'taskora-alarm-cache-v4';
+
+const SHELL_CACHE = 'taskora-shell-v1';
 
 // Only cache static assets (JS, CSS, images, fonts), NEVER API responses.
 // BUG FIX: Previously the SW cached ALL requests including API calls.
@@ -12,6 +14,10 @@ const STATIC_EXTENSIONS = /\.(js|css|png|jpg|jpeg|gif|svg|ico|woff2?|ttf|eot)$/;
 const DEV_PATTERN = /^https?:\/\/localhost(:\d+)?\//;
 
 self.addEventListener('install', (event) => {
+  // Pre-cache index.html so SPA fallback can serve it for navigation requests
+  event.waitUntil(
+    caches.open(SHELL_CACHE).then((cache) => cache.add('/index.html'))
+  );
   self.skipWaiting();
 });
 
@@ -76,6 +82,19 @@ self.addEventListener('fetch', (event) => {
 
   // BUG FIX: Skip caching for all API requests — never cache 401/500 responses.
   if (API_PATTERN.test(url.pathname)) {
+    return;
+  }
+
+  // SPA fallback — handle navigation requests (page refresh, direct URL open).
+  // Network-first: try the real server. If it returns 404 or the server is
+  // unreachable (common on Render free tier while sleeping), serve the cached
+  // index.html so React Router can handle the route client-side.
+  if (event.request.mode === 'navigate') {
+    event.respondWith(
+      fetch(event.request).catch(() =>
+        caches.open(SHELL_CACHE).then((cache) => cache.match('/index.html'))
+      )
+    );
     return;
   }
 
