@@ -6,6 +6,8 @@ const RAW_API_BASE =
 export const API_BASE =
   RAW_API_BASE.replace(/\/api\/v1\/?$/, '');
 
+console.log('[API] Base URL:', API_BASE);
+
 const api = axios.create({
   baseURL: API_BASE,
   withCredentials: true,
@@ -14,6 +16,12 @@ const api = axios.create({
 
 const cache = new Map();
 const CACHE_TTL = 30000;
+
+// Automatic retry for Render sleeping backend (network errors / 503)
+const MAX_RETRIES = 3;
+const RETRY_DELAY_MS = 2000;
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 api.interceptors.request.use(
   (config) => {
@@ -74,7 +82,9 @@ api.interceptors.response.use(
     }
     return response;
   },
-  (error) => {
+  async (error) => {
+    const config = error.config;
+
     if (
       error.response?.status === 401 &&
       error.config?.url !== '/api/v1/auth/google-login'
@@ -91,20 +101,31 @@ api.interceptors.response.use(
     }
 
     if (error.code === 'ECONNABORTED') {
-      console.error('Request timed out:', error.config?.url);
+      console.error('[API] Request timed out:', config?.url);
     }
 
     if (error.code === 'ERR_NETWORK') {
-      console.error(
-        'Network error — server may be down:',
-        error.config?.url
-      );
+      console.error('[API] Network error — server may be down:', config?.url);
     }
 
     if (error.response?.status === 503) {
-      console.warn(
-        'Backend database unavailable — service degraded'
-      );
+      console.warn('[API] Backend database unavailable — service degraded');
+    }
+
+    // Retry logic for network errors or 503 (Render sleeping backend)
+    const shouldRetry =
+      (error.code === 'ERR_NETWORK' || error.response?.status === 503 || error.code === 'ECONNABORTED') &&
+      config &&
+      !config._retryCount;
+
+    if (shouldRetry) {
+      config._retryCount = (config._retryCount || 0) + 1;
+
+      if (config._retryCount <= MAX_RETRIES) {
+        console.log(`[API] Retry ${config._retryCount}/${MAX_RETRIES} for ${config.url}...`);
+        await sleep(RETRY_DELAY_MS * config._retryCount);
+        return api(config);
+      }
     }
 
     return Promise.reject(error);

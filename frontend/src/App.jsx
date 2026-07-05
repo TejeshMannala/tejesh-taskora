@@ -76,6 +76,7 @@ function App() {
             <Route path="/calendar" element={<Navigate to="/tasks" replace />} />
           </Route>
         </Route>
+        <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </div>
   );

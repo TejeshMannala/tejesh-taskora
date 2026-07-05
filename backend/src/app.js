@@ -180,10 +180,13 @@ const hasFrontend = fs.existsSync(frontendIndex);
 
 if (hasFrontend) {
   console.log(`[App] Serving frontend from ${frontendDist}`);
+  console.log(`[App] Frontend index exists: ${fs.existsSync(frontendIndex)}`);
   app.use(express.static(frontendDist));
   app.use((req, res, next) => {
     if (req.method !== 'GET') return next();
     if (req.path.startsWith('/api/') || req.path.startsWith('/uploads/') || req.path === '/health') return next();
+
+    console.log(`[App] SPA fallback — serving index.html for ${req.originalUrl}`);
     res.sendFile(frontendIndex, (err) => {
       if (err) {
         console.warn(`[App] SPA fallback failed for ${req.originalUrl}:`, err.message);
@@ -197,6 +200,8 @@ if (hasFrontend) {
   });
 } else {
   console.log(`[App] Frontend dist not found at ${frontendDist} — only serving API`);
+  console.log(`[App] __dirname: ${__dirname}`);
+  console.log(`[App] Checked path: ${frontendIndex}`);
 }
 
 app.use((err, req, res, next) => {
